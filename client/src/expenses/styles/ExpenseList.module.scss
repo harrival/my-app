@@ -1,0 +1,41 @@
+.center {
+    text-align: center;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.selectAndTooltip {
+    display: flex;
+    flex-direction: column-reverse;
+}
+
+.centerText {
+    text-align: center;
+    margin-bottom: 15px;
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+
+}
+
+.expenseList {
+    list-style: none;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: auto;
+    padding: 0;
+}
+
+.dropdownClass {
+    width: 300px;
+    margin: auto;
+}
+
+@media (max-width: 768px) {
+    .expenseList {
+        padding: 0;
+    }
+
+}

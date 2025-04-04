@@ -1,0 +1,76 @@
+.itemPosition {
+    position: relative;
+}
+
+.expenseItem,
+.expandedItem {
+    width: 400px;
+    height: 50px;
+    margin: 15px;
+    border-radius: 10px;
+    box-shadow: var(--box-shadow);
+    overflow: hidden;
+    position: relative;
+    border: var(--border-transparent);
+    transition: min-height .3s ease-in-out;
+    background: white;
+
+    &:hover {
+        border: var(--border-hover-color);
+        // border: 2px solid #7c3dc0;
+        background-color: var(--background-hover-color);
+        // background-color: #9255d3;
+        cursor: pointer;
+    }
+}
+
+.expandedItem {
+    height: auto;
+}
+
+.hideDetails {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    text-align: center;
+    margin-top: 15px;
+}
+
+.showDetails {
+    padding: 15px;
+    transition: transform 1s ease;
+}
+
+.expenseItemAmount {
+    width: 50px;
+    text-align: left;
+}
+
+.expenseItemCategory {
+    width: 150px;
+    text-align: left;
+}
+
+// .expenseItemDate {
+
+// }
+
+.editDelete {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.edit {
+
+    &:hover {
+        color: red;
+    }
+}
+
+@media (max-width: 768px) {
+
+    .expenseItem,
+    .expandedItem {
+        width: 90vw;
+    }
+}

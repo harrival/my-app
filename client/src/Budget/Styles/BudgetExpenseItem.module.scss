@@ -1,0 +1,23 @@
+.list {
+    border: 2px solid black;
+    border-radius: 10px;
+    width: 100px;
+    text-align: center;
+    background-color: white;
+    margin: 15px;
+}
+
+.lineItem {
+    display: flex;
+    justify-content: space-between;
+    padding: 5px;
+}
+
+.edit {
+    cursor: pointer;
+}
+
+.delete {
+    cursor: pointer;
+    color: red;
+}
