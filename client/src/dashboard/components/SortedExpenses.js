@@ -14,17 +14,6 @@ const SortedExpenses = () => {
     };
     var monthsList = [
         { label: "Janurary", value: '01', totalExpenses: 0, totalSavings: 0 },
-        { label: "February", value: '02', totalExpenses: 0, totalSavings: 0 },
-        { label: "March", value: '03', totalExpenses: 0, totalSavings: 0 },
-        { label: "April", value: '04', totalExpenses: 0, totalSavings: 0 },
-        { label: "May", value: '05', totalExpenses: 0, totalSavings: 0 },
-        { label: "June", value: '06', totalExpenses: 0, totalSavings: 0 },
-        { label: "July", value: '07', totalExpenses: 0, totalSavings: 0 },
-        { label: "August", value: '08', totalExpenses: 0, totalSavings: 0 },
-        { label: "September", value: '09', totalExpenses: 0, totalSavings: 0 },
-        { label: "October", value: '10', totalExpenses: 0, totalSavings: 0 },
-        { label: "November", value: '11', totalExpenses: 0, totalSavings: 0 },
-        { label: "December", value: '12', totalExpenses: 0, totalSavings: 0 },
     ]
 
     // Parse data

@@ -12,20 +12,22 @@ import ProfilePage from '../../user/pages/Profile';
 import MonthlyBudget from '../../Budget/Pages/MonthlyBudget';
 
 const Router = () => {
-    const auth = useContext(AuthContext);
+    // const auth = useContext(AuthContext);
+    const auth = true
+
 
     let routes;
 
-    if (auth.isLoggedIn) {
+    if (auth) {
         routes = (
             <>
                 <Route path="/" element={<Dashboard />} />
-                <Route path="/Expenses" element={<Expenses />} />
+                {/* <Route path="/Expenses" element={<Expenses />} /> */}
                 <Route path="/User" element={<User />} />
-                <Route path="/Savings" element={<Savings />} />
+                {/* <Route path="/Savings" element={<Savings />} /> */}
 
-                <Route path="/Goals" element={<Goals />} />
-                <Route path="/AddGoal" element={<AddGoal />} />
+                {/* <Route path="/Goals" element={<Goals />} /> */}
+                {/* <Route path="/AddGoal" element={<AddGoal />} /> */}
 
                 <Route path="/Profile" element={<ProfilePage />} />
 

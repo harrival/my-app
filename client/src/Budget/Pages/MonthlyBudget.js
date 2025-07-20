@@ -1,5 +1,5 @@
 import React from 'react';
-import BudgetBuilder from '../Components/BudgetBuilder';
+import PlayerBuilder from '../Components/PlayerBuilder';
 import localstorage from '../../localstorage.json'
 
 const MonthlyBudget = () => {
@@ -12,7 +12,7 @@ const MonthlyBudget = () => {
 
     return (
         <>
-            <BudgetBuilder />
+            <PlayerBuilder />
             {/* {test} */}
         </>
     );

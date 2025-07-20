@@ -6,7 +6,7 @@ import Input from '../../UI/Input/Input';
 import Button from '../../UI/Button/Button';
 import { db, LIST_TITLES } from '../../shared/LocalBase/localbase';
 
-const IncomeForBudgetBuilder = (props) => {
+const IncomeForPlayerBuilder = (props) => {
     const [incomeExists, setIncomeExists] = useState(false);
     const [formState, inputHandler] = useForm({
         Title: {
@@ -77,4 +77,4 @@ const IncomeForBudgetBuilder = (props) => {
     );
 }
 
-export default IncomeForBudgetBuilder;
+export default IncomeForPlayerBuilder;

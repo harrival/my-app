@@ -10,7 +10,8 @@ import HoverMenuButton from './HoverMenuButton.js'
 
 const Header = (props) => {
     // auth is now an object that will hold the isLoggedIn, login, logout
-    const auth = useContext(AuthContext);
+    // const auth = useContext(AuthContext);
+    const auth = true
     let navigate = useNavigate();
 
     // the Drawer is for small screens and mobile views
@@ -18,7 +19,7 @@ const Header = (props) => {
 
     const navLinks =
         <div className={classes.navLinks}>
-            {auth.isLoggedIn &&
+            {auth &&
                 <>
                     <NavLink
                         to="/"
@@ -26,29 +27,29 @@ const Header = (props) => {
                         onClick={() => props.setColor("#ebe3ff")}>Home
                     </NavLink>
 
-                    <NavLink
+                    {/* <NavLink
                         to="/expenses"
                         className={classes.link}
                         onClick={() => props.setColor("#ffe0e0")}>Expenses
-                    </NavLink>
+                    </NavLink> */}
 
-                    <NavLink
+                    {/* <NavLink
                         to="/Savings"
                         className={classes.link}
                         onClick={() => props.setColor("#e7ffe3")}>Savings
-                    </NavLink>
+                    </NavLink> */}
 
 
-                    <NavLink
+                    {/* <NavLink
                         to="/Goals"
                         className={classes.link}
                         onClick={() => props.setColor("#e7ffe3")}>Goals
-                    </NavLink>
+                    </NavLink> */}
 
                     <NavLink
                         to="/Budget"
                         className={classes.link}
-                        onClick={() => props.setColor("#e7ffe3")}>Budget
+                        onClick={() => props.setColor("#e7ffe3")}>Play Ground
                     </NavLink>
                 </>
             }
@@ -89,7 +90,7 @@ const Header = (props) => {
 
                 <div className={classes.loggedInButtons}>
                     {auth.isLoggedIn && <Button onClick={props.onShowModal}>Add Expense</Button>}
-                    {auth.isLoggedIn && <div className={classes.hoverMenu}>
+                    {auth && <div className={classes.hoverMenu}>
                         <span>Profile</span>
                         <div className={classes.subMenu}>
                             <HoverMenuButton props={props} />

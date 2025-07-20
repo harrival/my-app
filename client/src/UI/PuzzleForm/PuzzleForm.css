@@ -1,0 +1,44 @@
+.input-group {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 1rem;
+}
+.input-group label {
+  margin-bottom: 0.5rem;
+  font-weight: bold;
+  display: block;
+}
+.input-group input,
+.input-group select {
+  padding: 0.5rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+.input-group input:focus,
+.input-group select:focus {
+  border-color: #007bff;
+  outline: none;
+}
+.input-group p {
+  color: red;
+  margin-top: auto;
+}
+.addPlayerBtn {
+  background-color: rgb(63, 63, 189);
+}
+.addPlayerBtn:hover,
+.addPlayerBtn:active {
+    background-color: rgb(115, 115, 181);
+}
+.addPlayerBtn {
+    cursor: pointer;
+    font: inherit;
+    border: none;
+    color: white;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    border-radius: 25px;
+    border: 3px solid transparent;
+}

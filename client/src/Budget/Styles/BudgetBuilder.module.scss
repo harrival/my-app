@@ -20,3 +20,26 @@
     display: flex;
     flex-wrap: wrap;
 }
+
+.centerButton {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.spanCount {
+    margin: 10px;
+}
+
+.puzzleForm {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.puzzleForm input {
+    margin: 5px 0;
+}
+.puzzleForm button {
+    margin-top: 10px;
+}

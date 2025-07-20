@@ -6,7 +6,7 @@ import Button from '../../UI/Button/Button';
 import Modal from '../../UI/Modal/Modal';
 import { db, LIST_TITLES } from '../../shared/LocalBase/localbase';
 
-const ExpenseForBudgetBuilder = (props) => {
+const ExpenseForPlayerBuilder = (props) => {
     const [budgetExists, setBudgetExists] = useState(false);
     const [formState, inputHandler] = useForm({
         Title: {
@@ -77,4 +77,4 @@ const ExpenseForBudgetBuilder = (props) => {
     );
 }
 
-export default ExpenseForBudgetBuilder;
+export default ExpenseForPlayerBuilder;
