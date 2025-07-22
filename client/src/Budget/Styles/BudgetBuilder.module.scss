@@ -43,3 +43,31 @@
 .puzzleForm button {
     margin-top: 10px;
 }
+.borderedTable {
+    border-collapse: collapse;
+    width: 100%;
+}
+.borderedTable th, .borderedTable td {
+    border: 1px solid black;
+    padding: 8px;
+    text-align: left;
+}
+.borderedTable th {
+    background-color: #f2f2f2;
+}
+.editPlayer {
+    cursor: pointer;
+    color: blue;
+    text-decoration: underline;
+    margin: '10%'
+}
+.deletePlayer {
+    cursor: pointer;
+    color: red;
+    text-decoration: underline;
+    margin-left:40%;
+}
+
+.highlight {
+    background-color: yellow;
+}

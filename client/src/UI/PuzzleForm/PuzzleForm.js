@@ -1,8 +1,15 @@
 import React, { useState } from 'react';
 import Button from '../Button/Button';
 import './PuzzleForm.css'; // Assuming you have some basic styles in this file
+import PlayersTable from '../../PlayersTable.json';
 
-const PuzzleForm = () => {
+const puzzleStatus = "Progress"
+const representativeID = 101
+const eventID = 201
+const TimeUsed = "00:00:00"
+const TimeUpdated = null;
+
+const PuzzleForm = ({setShowPuzzleForm, setUpdate}) => {
     const [formState, setFormState] = useState({
         contact: '',
         username: '',
@@ -67,14 +74,61 @@ const PuzzleForm = () => {
         });
 
         if (!contactError && !usernameError && !puzzlePetError) {
-            console.log('Form submitted:', formState);
+            const newPlayer = {
+                id: PlayersTable.length + 1,
+                Username: formState.username,
+                Email: formState.contact.includes('@') ? formState.contact : '',
+                PhoneNumber: formState.contact.match(/^\d{10}$/) ? formState.contact : '',
+                PuzzleType: formState.puzzlePet,
+                TimeUsed,
+                PuzzleStatus: puzzleStatus,
+                TimeCreated: new Date().toISOString(),
+                TimeUpdated,
+                RepresentativeID: representativeID,
+                EventID: eventID,
+            };
+
+            PlayersTable.push(newPlayer);
+            console.log('Form submitted and player added:', newPlayer);
+            setShowPuzzleForm(false);
+            setFormState({
+                contact: '',
+                username: '',
+                puzzlePet: '',
+            });
+            setErrors({
+                contact: '',
+                username: '',
+                puzzlePet: '',
+            });
+            setTimeout(() => {
+                setUpdate(prev => !prev); // Trigger update in parent component
+            }, 3000); // 5 seconds delay
         } else {
             console.log('Form is invalid!');
         }
+
+    };
+
+    const cancleForm = () => {
+        setShowPuzzleForm(false);
+        setFormState({
+            contact: '',
+            username: '',
+            puzzlePet: '',
+        });
+        setErrors({
+            contact: '',
+            username: '',
+            puzzlePet: '',
+        });
     };
 
     return (
-        <form onSubmit={handleSubmit}>
+        <form 
+            onSubmit={handleSubmit} 
+            className='puzzleForm'
+        >
             <div className='input-group'>
                 <label htmlFor="contact">Contact</label>
                 <input
@@ -110,7 +164,16 @@ const PuzzleForm = () => {
                 </select>
                 {errors.puzzlePet && <p>{errors.puzzlePet}</p>}
             </div>
-            <button className='addPlayerBtn' type="submit">Submit</button>
+            <div className='button-group'>
+                <button className='addPlayerBtn' type="submit">Submit</button>
+                <button
+                    className='cancelBtn'
+                    type="button"
+                    onClick={cancleForm}
+                >
+                    Cancel
+                </button>
+            </div>
         </form>
     );
 };

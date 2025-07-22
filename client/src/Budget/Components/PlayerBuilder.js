@@ -1,41 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import Input from '../../UI/Input/Input';
 import Button from '../../UI/Button/Button';
 import Card from '../../UI/Card/Card';
-
 import classes from '../Styles/BudgetBuilder.module.scss';
-import { db, LIST_TITLES } from '../../shared/LocalBase/localbase';
-import BudgetExpenseList from './BudgetExpenseList';
-import BudgetIncomeList from './BudgetIncomeList';
 import PuzzleForm from '../../UI/PuzzleForm/PuzzleForm';
+import PlayerTable from '../../PlayersTable.json';
 
 const PlayerBuilder = (props) => {
+    const [catPlayers, setCatPlayers] = useState([]);
+    const [dogPlayers, setDogPlayers] = useState([]);
+    const [update, setUpdate] = useState(false);
 
-
-    // getTotalSumFromExpenses is written here and called in the useEffect to avoid the issue 
-    // `cannot update a component while rendering a different component`
-    // https://github.com/facebook/react/issues/18178
-    const getTotalSumFromExpenses = (totalExpenseValueFromChild) => {
-        // setTotalExpenses(totalExpenseValueFromChild);
-    };
-    const getTotalSumFromIncome = (totalExpenseValueFromChild) => {
-        // setTotalIncome(totalExpenseValueFromChild);
-    };
 
     useEffect(() => {
-        const getData = async () => {
-            await db.collection(LIST_TITLES.budgetExpenses).get().then(expenses => {
-                // setBudgetData(expenses);
-            });
-            await db.collection(LIST_TITLES.budgetIncome).get().then(income => {
-                // setIncomeData(income);
-            });
-        }
-        getTotalSumFromExpenses();
-        getTotalSumFromIncome();
-        getData();
-    }, []);
-
+        const catCount = PlayerTable.filter(player => player.PuzzleType === 'Cat');
+        const dogCount = PlayerTable.filter(player => player.PuzzleType === 'Dog');
+        console.log(catCount, dogCount);
+        setCatPlayers(catCount);
+        setDogPlayers(dogCount);
+    }, [update]);
 
     const [showPuzzleForm, setShowPuzzleForm] = useState(false);
 
@@ -43,33 +25,132 @@ const PlayerBuilder = (props) => {
         setShowPuzzleForm(!showPuzzleForm);
     };
 
+    const editPlayerHandler = (playerId, puzzleType) => {
+        const updatedPlayers = puzzleType === 'Cat' ? [...catPlayers] : [...dogPlayers];
+        const playerIndex = updatedPlayers.findIndex(player => player.id === playerId);
+        if (playerIndex !== -1) {
+            const playerToEdit = updatedPlayers[playerIndex];
+            setShowPuzzleForm(true);
+            console.log('Editing player:', playerToEdit);
+            // props.setEditingPlayer({ ...playerToEdit, puzzleType });
+        }
+    };
+
+    const deletePlayerHandler = (playerId, puzzleType) => {
+        
+        PlayerTable.splice(PlayerTable.findIndex(player => player.id === playerId), 1);
+        setTimeout(() => {
+            setUpdate(prev => !prev); // Trigger update to refresh the UI after delay
+        }, 2000);
+    };
+
+    const searchPlayersHandler = (searchTerm) => {
+        const lowerCaseSearchTerm = searchTerm.toLowerCase();
+        const highlightPlayers = (players) => {
+            return players.map(player => ({
+                ...player,
+                highlight: player.Username.toLowerCase().includes(lowerCaseSearchTerm)
+            }));
+        };
+        console.log(highlightPlayers(PlayerTable.filter(player => player.PuzzleType === 'Cat')));
+        const updatedCatPlayers = highlightPlayers(PlayerTable.filter(player => player.PuzzleType === 'Cat'));
+        const updatedDogPlayers = highlightPlayers(PlayerTable.filter(player => player.PuzzleType === 'Dog'));
+        setCatPlayers(updatedCatPlayers);
+        setDogPlayers(updatedDogPlayers);
+    };
+
     return (
         <div className='playerBoard'>
+            {showPuzzleForm && (
+                <div className={classes.puzzleForm}>
+                    <PuzzleForm setShowPuzzleForm={setShowPuzzleForm} setUpdate={setUpdate}/>
+                </div>
+            )}
             
             <div className={classes.centerButton}>
-                <Button onClick={() => showPuzzleFormHandler()}>Add player</Button>
+                <Button onClick={showPuzzleFormHandler}>Add player</Button>
+            </div>
+            <div className={classes.searchBox}>
+                <input 
+                    type="text" 
+                    placeholder="Search players..." 
+                    onChange={(e) => searchPlayersHandler(e.target.value)} 
+                />
             </div>
             <div className={classes.budgetBuilder}>
                 
                 <div className={`${classes.budgetBox} ${classes.centerButton}`}>
                     <div className={classes.budgetHeader}>
-                        <Card><span className={classes.spanCount} >Total cat players:  00</span></Card>
-                        
+                        <Card><span className={classes.spanCount}>Total cat players: {catPlayers.length}</span></Card>
                     </div>
                 </div>
 
                 <div className={`${classes.budgetBox} ${classes.centerButton}`}>
                     <div className={classes.budgetHeader}>
-                        <Card><span className={classes.spanCount}>Total dog players: 00</span></Card>
-                        
+                        <Card><span className={classes.spanCount}>Total dog players: {dogPlayers.length}</span></Card>
                     </div>
                 </div>
             </div>
-            {showPuzzleForm && (
-                <div className={classes.puzzleForm}>
-                    <PuzzleForm />
+            <div className={classes.budgetBuilder}>
+                
+                <div className={classes.budgetBox}>
+                    <table className={`${classes.playerTable} ${classes.borderedTable}`}>
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>Username</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {catPlayers.map((player, index) => (
+                                <tr
+                                    key={player.id}
+                                >
+                                    <td>{index + 1}</td>
+                                    <td className={player.highlight ? classes.highlight : ''}>{player.Username}</td>
+                                    <td>
+                                        <span className={classes.editPlayer} onClick={() => editPlayerHandler(player.id, 'Cat')}>
+                                            Edit
+                                        </span>
+                                        <span className={classes.deletePlayer} onClick={() => deletePlayerHandler(player.id, 'Cat')}>
+                                            Delete
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
                 </div>
-            )}
+
+                <div className={classes.budgetBox}>
+                    <table className={`${classes.playerTable} ${classes.borderedTable}`}>
+                        <thead>
+                            <tr>
+                                <th>No</th>
+                                <th>Username</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {dogPlayers.map((player, index) => (
+                                <tr key={player.id}>
+                                    <td>{index + 1}</td>
+                                    <td>{player.Username}</td>
+                                    <td>
+                                        <span className={classes.editPlayer} onClick={() => editPlayerHandler(player.id, 'Dog')}>
+                                            Edit
+                                        </span>
+                                        <span className={classes.deletePlayer} onClick={() => deletePlayerHandler(player.id, 'Dog')}>
+                                            Delete
+                                        </span>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     );
 }

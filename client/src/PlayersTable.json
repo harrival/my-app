@@ -1,0 +1,43 @@
+[
+    {
+        "id": 1,
+        "Username": "Emeka",
+        "Email": "emeka@gmail.com",
+        "PhoneNumber": "123-456-7890",
+        "PuzzleType": "Cat",
+        "TimeUsed": "00:15:30",
+        "PuzzleStatus": "Completed",
+        "TimeCreated": "2023-10-01T12:00:00Z",
+        "TimeUpdated": "2023-10-01T12:30:00Z",
+        "RepresentativeID": 101,
+        "EventID": 201
+
+    },
+    {
+        "id": 2,
+        "Username": "Obi",
+        "Email": "obi@gmail.com",
+        "PhoneNumber": "098-765-4321",
+        "PuzzleType": "Dog",
+        "TimeUsed": "00:15:21",
+        "PuzzleStatus": "Completed",
+        "TimeCreated": "2023-10-01T12:00:00Z",
+        "TimeUpdated": "2023-10-01T12:30:00Z",
+        "RepresentativeID": 101,
+        "EventID": 201
+    },
+
+    {
+        "id": 3,
+        "Username": "Son",
+        "Email": "son@gmail.com",
+        "PhoneNumber": "098-765-3389",
+        "PuzzleType": "Dog",
+        "TimeUsed": "00:15:40",
+        "PuzzleStatus": "",
+        "TimeCreated": "2023-10-01T12:00:00Z",
+        "TimeUpdated": "2023-10-01T12:30:00Z",
+        "RepresentativeID": 101,
+        "EventID": 201
+    }
+]
