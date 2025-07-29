@@ -5,10 +5,10 @@
         "Email": "emeka@gmail.com",
         "PhoneNumber": "123-456-7890",
         "PuzzleType": "Cat",
-        "TimeUsed": "00:15:30",
-        "PuzzleStatus": "Completed",
+        "TimeUsed": "00:00:00",
+        "PuzzleStatus": "Created",
         "TimeCreated": "2023-10-01T12:00:00Z",
-        "TimeUpdated": "2023-10-01T12:30:00Z",
+        "TimeUpdated": "",
         "RepresentativeID": 101,
         "EventID": 201
 
@@ -19,10 +19,10 @@
         "Email": "obi@gmail.com",
         "PhoneNumber": "098-765-4321",
         "PuzzleType": "Dog",
-        "TimeUsed": "00:15:21",
-        "PuzzleStatus": "Completed",
+        "TimeUsed": "00:00:00",
+        "PuzzleStatus": "Created",
         "TimeCreated": "2023-10-01T12:00:00Z",
-        "TimeUpdated": "2023-10-01T12:30:00Z",
+        "TimeUpdated": "",
         "RepresentativeID": 101,
         "EventID": 201
     },
@@ -33,10 +33,10 @@
         "Email": "son@gmail.com",
         "PhoneNumber": "098-765-3389",
         "PuzzleType": "Dog",
-        "TimeUsed": "00:15:40",
-        "PuzzleStatus": "",
+        "TimeUsed": "00:00:00",
+        "PuzzleStatus": "Created",
         "TimeCreated": "2023-10-01T12:00:00Z",
-        "TimeUpdated": "2023-10-01T12:30:00Z",
+        "TimeUpdated": "",
         "RepresentativeID": 101,
         "EventID": 201
     }

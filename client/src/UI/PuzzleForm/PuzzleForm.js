@@ -3,7 +3,7 @@ import Button from '../Button/Button';
 import './PuzzleForm.css'; // Assuming you have some basic styles in this file
 import PlayersTable from '../../PlayersTable.json';
 
-const puzzleStatus = "Progress"
+const puzzleStatus = "Created"
 const representativeID = 101
 const eventID = 201
 const TimeUsed = "00:00:00"

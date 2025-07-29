@@ -1,5 +1,5 @@
 import React from 'react';
-import PlayerBuilder from '../Components/PlayerBuilder';
+import PlayerBuilder from '../../Budget/Components/PlayerBuilder';
 import localstorage from '../../localstorage.json'
 
 const MonthlyBudget = () => {

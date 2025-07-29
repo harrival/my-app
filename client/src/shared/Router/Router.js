@@ -4,12 +4,13 @@ import { Routes, Route } from 'react-router-dom';
 import Dashboard from '../../dashboard/pages/Dashboard';
 import Expenses from '../../expenses/pages/Expenses';
 import AddGoal from '../../goals/pages/AddGoal';
-import Goals from '../../goals/pages/Goals';
+import InProgressPlayers from '../../goals/pages/InProgressPlayers';
 import Savings from '../../savings/pages/Savings';
 import User from '../../user/pages/User';
 import AuthenticateUser from '../Authenticate/Auth';
 import ProfilePage from '../../user/pages/Profile';
-import MonthlyBudget from '../../Budget/Pages/MonthlyBudget';
+import MonthlyBudget from '../../goals/pages/MonthlyBudget';
+import DailyPlayers from '../../goals/pages/DailyPlayers';
 
 const Router = () => {
     // const auth = useContext(AuthContext);
@@ -22,11 +23,12 @@ const Router = () => {
         routes = (
             <>
                 <Route path="/" element={<Dashboard />} />
-                {/* <Route path="/Expenses" element={<Expenses />} /> */}
+                <Route path="/Expenses" element={<Expenses />} />
                 <Route path="/User" element={<User />} />
                 {/* <Route path="/Savings" element={<Savings />} /> */}
 
-                {/* <Route path="/Goals" element={<Goals />} /> */}
+                <Route path="/InProgressPlayers" element={<InProgressPlayers />} />
+                <Route path="/DailyPlayers" element={<DailyPlayers />} />
                 {/* <Route path="/AddGoal" element={<AddGoal />} /> */}
 
                 <Route path="/Profile" element={<ProfilePage />} />
