@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import Button from '../Button/Button';
 import './PuzzleForm.css'; // Assuming you have some basic styles in this file
 import PlayersTable from '../../PlayersTable.json';
+import { addData } from '../../Budget/Components/IndexDB';
+import {useIndexedDB} from '../../Budget/Components/IndexedDBContextProvider';
 
 const puzzleStatus = "Created"
 const representativeID = 101
@@ -10,6 +12,9 @@ const TimeUsed = "00:00:00"
 const TimeUpdated = null;
 
 const PuzzleForm = ({setShowPuzzleForm, setUpdate}) => {
+    const { db, loading, error } = useIndexedDB();
+    const [status, setStatus] = useState('');
+
     const [formState, setFormState] = useState({
         contact: '',
         username: '',
@@ -60,8 +65,13 @@ const PuzzleForm = ({setShowPuzzleForm, setUpdate}) => {
         setErrors((prevErrors) => ({ ...prevErrors, puzzlePet: error }));
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
+        if (!db) {
+            setStatus('Database is not ready yet.');
+            return;
+          }
+      
 
         const contactError = validateContact(formState.contact);
         const usernameError = validateUsername(formState.username);
@@ -75,7 +85,7 @@ const PuzzleForm = ({setShowPuzzleForm, setUpdate}) => {
 
         if (!contactError && !usernameError && !puzzlePetError) {
             const newPlayer = {
-                id: PlayersTable.length + 1,
+                // id: PlayersTable.length + 1,
                 Username: formState.username,
                 Email: formState.contact.includes('@') ? formState.contact : '',
                 PhoneNumber: formState.contact.match(/^\d{10}$/) ? formState.contact : '',
@@ -87,9 +97,14 @@ const PuzzleForm = ({setShowPuzzleForm, setUpdate}) => {
                 RepresentativeID: representativeID,
                 EventID: eventID,
             };
-
-            PlayersTable.push(newPlayer);
-            console.log('Form submitted and player added:', newPlayer);
+            try {
+                await addData(db, 'mazePuzzlePlayers', newPlayer);
+                setStatus('Data added successfully! 🎉');
+              } catch (e) {
+                setStatus(`Error: ${e}`);
+              }
+            // PlayersTable.push(newPlayer);
+            // console.log('Form submitted and player added:', newPlayer);
             setShowPuzzleForm(false);
             setFormState({
                 contact: '',
