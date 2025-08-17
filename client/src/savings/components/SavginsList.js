@@ -11,11 +11,11 @@ const SavingsList = (props) => {
         setSelectedOption(selectedOption);
     };
 
-    if (props.items.length === 0) {
-        return <div className={classes.center}>
-            <h2>No Expenses Found</h2>
-        </div>
-    }
+    // if (props.items.length === 0) {
+    //     return <div className={classes.center}>
+    //         <h2>No Expenses Found</h2>
+    //     </div>
+    // }
 
     // Only show Savings
     const onlyExpenses = props.items.filter(i => i.Category === 'Savings');
