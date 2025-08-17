@@ -2,42 +2,27 @@ import React, { useContext } from 'react';
 import { AuthContext } from '../Context/auth-context';
 import { Routes, Route } from 'react-router-dom';
 import Dashboard from '../../dashboard/pages/Dashboard';
-import Expenses from '../../expenses/pages/Expenses';
-import AddGoal from '../../goals/pages/AddGoal';
-import InProgressPlayers from '../../goals/pages/InProgressPlayers';
-import Savings from '../../savings/pages/Savings';
+import InProgressPlayers from '../../GamePlayers/Components/InProgressPlayers';
 import User from '../../user/pages/User';
 import AuthenticateUser from '../Authenticate/Auth';
 import ProfilePage from '../../user/pages/Profile';
-import MonthlyBudget from '../../goals/pages/MonthlyBudget';
-import DailyPlayers from '../../goals/pages/DailyPlayers';
+import PlayerBuilder from '../../GamePlayers/Components/PlayerBuilder';
+import DailyPlayers from '../../GamePlayers/Components/DailyPlayers';
 
 const Router = () => {
-    // const auth = useContext(AuthContext);
     const auth = true
-
-
     let routes;
 
     if (auth) {
         routes = (
             <>
                 <Route path="/" element={<Dashboard />} />
-                <Route path="/Expenses" element={<Expenses />} />
                 <Route path="/User" element={<User />} />
-                {/* <Route path="/Savings" element={<Savings />} /> */}
-
                 <Route path="/InProgressPlayers" element={<InProgressPlayers />} />
                 <Route path="/DailyPlayers" element={<DailyPlayers />} />
-                {/* <Route path="/AddGoal" element={<AddGoal />} /> */}
-
                 <Route path="/Profile" element={<ProfilePage />} />
-
-                <Route path="/Budget" element={<MonthlyBudget />} />
-
-                <Route
-                    path="*"
-                    element={<Dashboard to="/" replace />} />
+                <Route path="/PlayerBuilder" element={<PlayerBuilder />} />
+                <Route path="*" element={<Dashboard to="/" replace />} />
             </>
         );
     } else {

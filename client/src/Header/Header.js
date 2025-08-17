@@ -27,27 +27,8 @@ const Header = (props) => {
                         onClick={() => props.setColor("#ebe3ff")}>Home
                     </NavLink>
 
-                    {/* <NavLink
-                        to="/expenses"
-                        className={classes.link}
-                        onClick={() => props.setColor("#ffe0e0")}>Expenses
-                    </NavLink> */}
-
-                    {/* <NavLink
-                        to="/Savings"
-                        className={classes.link}
-                        onClick={() => props.setColor("#e7ffe3")}>Savings
-                    </NavLink> */}
-
-
-                    {/* <NavLink
-                        to="/Goals"
-                        className={classes.link}
-                        onClick={() => props.setColor("#e7ffe3")}>Goals
-                    </NavLink> */}
-
                     <NavLink
-                        to="/Budget"
+                        to="/PlayerBuilder"
                         className={classes.link}
                         onClick={() => props.setColor("#e7ffe3")}>Play Ground
                     </NavLink>

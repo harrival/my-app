@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import Button from '../../UI/Button/Button';
 import Card from '../../UI/Card/Card';
-import classes from '../Styles/BudgetBuilder.module.scss';
+import classes from '../Styles/PlayerBuilder.module.scss';
 import PuzzleForm from '../../UI/PuzzleForm/PuzzleForm';
 import PlayerTable from '../../PlayersTable.json';
-import InProgressPlayers from '../../goals/pages/InProgressPlayers';
-import DailyPlayers from '../../goals/pages/DailyPlayers';
+import InProgressPlayers from './InProgressPlayers';
+import DailyPlayers from './DailyPlayers';
 
 const PlayerBuilder = (props) => {
     const [catPlayers, setCatPlayers] = useState([]);

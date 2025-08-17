@@ -2,8 +2,6 @@ import React, { useState } from 'react';
 import Button from '../Button/Button';
 import './PuzzleForm.css'; // Assuming you have some basic styles in this file
 import PlayersTable from '../../PlayersTable.json';
-import { addData } from '../../Budget/Components/IndexDB';
-import {useIndexedDB} from '../../Budget/Components/IndexedDBContextProvider';
 
 const puzzleStatus = "Created"
 const representativeID = 101
@@ -12,7 +10,6 @@ const TimeUsed = "00:00:00"
 const TimeUpdated = null;
 
 const PuzzleForm = ({setShowPuzzleForm, setUpdate}) => {
-    const { db, loading, error } = useIndexedDB();
     const [status, setStatus] = useState('');
 
     const [formState, setFormState] = useState({
@@ -67,10 +64,6 @@ const PuzzleForm = ({setShowPuzzleForm, setUpdate}) => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        if (!db) {
-            setStatus('Database is not ready yet.');
-            return;
-          }
       
 
         const contactError = validateContact(formState.contact);
@@ -98,7 +91,6 @@ const PuzzleForm = ({setShowPuzzleForm, setUpdate}) => {
                 EventID: eventID,
             };
             try {
-                await addData(db, 'mazePuzzlePlayers', newPlayer);
                 setStatus('Data added successfully! 🎉');
               } catch (e) {
                 setStatus(`Error: ${e}`);

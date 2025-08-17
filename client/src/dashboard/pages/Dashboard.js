@@ -1,8 +1,4 @@
 import React from 'react';
-import ExpenseChart from '../components/ExpenseChart';
-import SavingsGoal from '../components/SavingsGoal';
-import SortedExpenses from '../components/SortedExpenses';
-import {createIndexedDB} from '../../Budget/Components/IndexDB';
 
 // CSS Modules let you use the same CSS class name in different files without worrying about naming clashes.
 import classes from '../styles/Dashboard.module.scss';
@@ -40,7 +36,6 @@ const Dashboard = () => {
           ];
           
           // Call the function to create the database.
-          createIndexedDB('mazePuzzlePlayerDB', 1, myDBConfig)
     }, []);
 
     return (
@@ -52,8 +47,6 @@ const Dashboard = () => {
                     <SavingsGoal />
                 </div> */}
                 <div className={classes.dashboardItem}>
-                    {/* <ExpenseChart /> */}
-                    <SortedExpenses />
                 </div>
 
             </div>
