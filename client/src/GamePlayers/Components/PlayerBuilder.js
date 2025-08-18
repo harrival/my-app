@@ -6,6 +6,7 @@ import PuzzleForm from '../../UI/PuzzleForm/PuzzleForm';
 import PlayerTable from '../../PlayersTable.json';
 import InProgressPlayers from './InProgressPlayers';
 import DailyPlayers from './DailyPlayers';
+import UsersList from './Testapi';
 
 const PlayerBuilder = (props) => {
     const [catPlayers, setCatPlayers] = useState([]);
@@ -236,6 +237,7 @@ const PlayerBuilder = (props) => {
         </div>
       </div>
       <DailyPlayers />
+      <UsersList />
       </div>
     );
 }
