@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import PlayersTable from '../../PlayersTable.json';
-import set from 'localbase/localbase/api/actions/set';
+import axios from 'axios';
 
 const InProgressPlayers = ({
   currentPlayer,
   updateCurrentPlayer,
   puzzleState,
   setHighlightCurrentPlayer,
-  setUpdate
 }) => {
   const [playTime, setPlayTime] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
@@ -37,7 +35,7 @@ const InProgressPlayers = ({
     setHighlightCurrentPlayer(true);
     const updatedPuzzleState = puzzleState.map((player) =>
       player.id === currentPlayer.id
-        ? { ...player, PuzzleStatus: "InProgress" }
+        ? { ...player, gamestatus: "InProgress" }
         : player
     );
     updateCurrentPlayer(updatedPuzzleState);
@@ -48,30 +46,23 @@ const InProgressPlayers = ({
     setIsRunning(false);
     setHighlightCurrentPlayer(false);
     setPlayTime(0); // Reset playTime after stopping
-
-    // const updatedPuzzleState = puzzleState.filter(
-    //   (player) => player.id !== currentPlayer.id
-    // );
-    // updateCurrentPlayer(updatedPuzzleState);
-    // setPlayTime(0);
+    const playedPlayer = {
+      timeused: formatTime(playTime),
+      timemodified: new Date().toISOString(),
+      gamestatus: 'Completed'
+    }
 
     //ToDo: Update the player status in PlayersTable in Database
     try {
-        const updatedPlayers = PlayersTable.map((player) => {
-            if (player.id === currentPlayer.id) {
-                return { 
-                    ...player, 
-                    TimeUsed: formatTime(playTime), 
-                    TimeUpdated: new Date().toISOString(), 
-                    PuzzleStatus: 'Completed' 
-                };
-            }
-            return player;
-        });
-        PlayersTable.splice(0, PlayersTable.length, ...updatedPlayers);
-        // Assuming you have a way to save the updatedPlayers back to the file or state
-        console.log('Updated Players:', updatedPlayers);
-        setUpdate(prev => !prev); // Trigger update to refresh the UI
+      const response = await axios.patch(`http://localhost:5001/editPlayer/${currentPlayer.playerguid}`, playedPlayer);
+      console.log('Player updated:', response.data);
+
+      if (response.status === 200) {
+        const updatedPuzzleState = puzzleState.filter(
+          (player) => player.playerguid !== currentPlayer.playerguid
+        );
+        updateCurrentPlayer(updatedPuzzleState);
+      }
     } catch (error) {
         console.error('Error updating player playTime:', error);
     }

@@ -11,9 +11,27 @@ const router = express.Router();
 /** Get users: [user, user, user] */
 
 /** Get all users */
-router.get("/all", async function (req, res, next) {
+router.get("/players", async function (req, res, next) {
   try {
-    const results = await db.query(`SELECT * FROM users`);
+    const results = await db.query(`SELECT * FROM gameplayers`);
+    return res.json(results.rows);
+  } catch (err) {
+    return next(err);
+  }
+});
+/** Get top 20 players users */
+router.get("/completedPlayers", async function (req, res, next) {
+  try {
+    const results = await db.query(
+      `SELECT playerguid, username, timeused, puzzletype 
+       FROM gameplayers 
+       WHERE gamestatus = $1 AND DATE(timecreated) = CURRENT_DATE 
+       ORDER BY timeused ASC 
+       LIMIT $2`, ['Completed', 20]);
+
+    if (!results.rows || results.rows.length === 0) {
+      return res.status(404).json({ error: "No completed players found" });
+    }
     return res.json(results.rows);
   } catch (err) {
     return next(err);
@@ -86,15 +104,15 @@ router.get("/good-search",
 
 /** Create new user, return user */
 
-router.post("/", async function (req, res, next) {
+router.post("/addplayer", async function (req, res, next) {
   try {
-    const { name, type } = req.body;
+    const { playerguid, username, email, phonenumber, puzzletype, timeused, repid, eventid} = req.body;
 
     const result = await db.query(
-          `INSERT INTO users (name, type) 
-           VALUES ($1, $2)
-           RETURNING id, name, type`,
-        [name, type]
+          `INSERT INTO gameplayers (playerguid, username, email, phonenumber, puzzletype, timeused, repid, eventid) 
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           RETURNING playerguid, username`,
+        [playerguid, username, email, phonenumber, puzzletype, timeused, repid, eventid]
     );
 
     return res.status(201).json(result.rows[0]);
@@ -108,15 +126,33 @@ router.post("/", async function (req, res, next) {
 
 /** Update user, returning user */
 
-router.patch("/:id", async function (req, res, next) {
+router.patch("/editPlayer/:id", async function (req, res, next) {
   try {
-    const { name, type } = req.body;
+    const { gamestatus, timeused,  timemodified} = req.body;
 
     const result = await db.query(
-          `UPDATE users SET name=$1, type=$2
-           WHERE id = $3
-           RETURNING id, name, type`,
-        [name, type, req.params.id]
+          `UPDATE gameplayers SET gamestatus=$1, timeused=$2, timemodified=$3
+           WHERE playerguid = $4
+           RETURNING id`,
+        [gamestatus, timeused, timemodified, req.params.id]
+    );
+
+    return res.json(result.rows[0]);
+  }
+
+  catch (err) {
+    return next(err);
+  }
+});
+router.patch("/editPlayerForm/:id", async function (req, res, next) {
+  try {
+    const { username, email,  phonenumber, puzzletype} = req.body;
+
+    const result = await db.query(
+          `UPDATE gameplayers SET username=$1, email=$2, phonenumber=$3, puzzletype=$4
+           WHERE playerguid = $5
+           RETURNING id`,
+        [username, email,  phonenumber, puzzletype, req.params.id]
     );
 
     return res.json(result.rows[0]);
@@ -130,10 +166,10 @@ router.patch("/:id", async function (req, res, next) {
 
 /** Delete user, returning {message: "Deleted"} */
 
-router.delete("/:id", async function (req, res, next) {
+router.delete("/deletePlayer/:id", async function (req, res, next) {
   try {
     const result = await db.query(
-        "DELETE FROM users WHERE id = $1",
+        "DELETE FROM gameplayers WHERE playerguid = $1",
         [req.params.id]
     );
 

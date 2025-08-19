@@ -1,46 +1,57 @@
 import React, { useEffect, useState } from 'react';
-import PlayersTable from '../../PlayersTable.json';
+import axios from 'axios';
+import Draggable from 'react-draggable';
+import { ResizableBox } from 'react-resizable';
+import 'react-resizable/css/styles.css';
 
-const DailyPlayers = () => {
-    const [players, setPlayers] = useState([]);
+import 'react-resizable/css/styles.css'; // Import styles for react-resizable
+import classes from '../Styles/PlayerBuilder.module.scss';
+
+const DailyPlayers = ({ PlayersTable }) => {
+    const [playedPlayers, setPlayedPlayers] = useState([]);
 
     useEffect(() => {
-        const fetchPlayers = async () => {
+        const fetchUsers = async () => {
             try {
-                const completedPlayers = PlayersTable
-                    .filter(player => player.PuzzleStatus === 'Completed')
-                    .sort((a, b) => a.TimeUsed - b.TimeUsed);
-                setPlayers(completedPlayers);
+                const response = await axios.get('http://localhost:5001/completedPlayers');
+                setPlayedPlayers(response.data);
             } catch (error) {
-                console.error('Error fetching players:', error);
+                console.error('Error fetching users:', error);
             }
         };
 
-        fetchPlayers();
+        fetchUsers();
     }, []);
 
     return (
-        <div>
-            <h1>Daily Players</h1>
-            <table border="1">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Puzzle Status</th>
-                        <th>Time Used</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {players.map(player => (
-                        <tr key={player.id}>
-                            <td>{player.Username}</td>
-                            <td>{player.PuzzleStatus}</td>
-                            <td>{player.TimeUsed}</td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
+        <Draggable>
+            <ResizableBox width={400} height={300} minConstraints={[200, 150]} maxConstraints={[800, 600]}>
+                <div className={classes.resizableContainer}>
+                    <h1 className={classes.completedDaily}>Daily Players</h1>
+                    <table
+                        border="1"
+                        className={`${classes.playerTable} ${classes.borderedTable}`}
+                    >
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Puzzle Type</th>
+                                <th>Time Used</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {playedPlayers.map((player) => (
+                                <tr key={player.playerguid}>
+                                    <td>{player.username}</td>
+                                    <td>{player.puzzletype}</td>
+                                    <td>{player.timeused}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </ResizableBox>
+        </Draggable>
     );
 };
 

@@ -3,48 +3,71 @@ import Button from '../../UI/Button/Button';
 import Card from '../../UI/Card/Card';
 import classes from '../Styles/PlayerBuilder.module.scss';
 import PuzzleForm from '../../UI/PuzzleForm/PuzzleForm';
-import PlayerTable from '../../PlayersTable.json';
 import InProgressPlayers from './InProgressPlayers';
 import DailyPlayers from './DailyPlayers';
-import UsersList from './Testapi';
+import EditPuzzleForm from '../../UI/PuzzleForm/EditPuzzleForm';
+import axios from 'axios';
 
 const PlayerBuilder = (props) => {
+    const [allPlayers, setAllPlayers] = useState([]);
     const [catPlayers, setCatPlayers] = useState([]);
     const [dogPlayers, setDogPlayers] = useState([]);
+    const [showPuzzleForm, setShowPuzzleForm] = useState(false);
+    const [showEditPuzzleForm, setShowEditPuzzleForm] = useState(false);
     const [update, setUpdate] = useState(false);
     const [isDogPlayInProgress, setIsDogPlayInProgress] = useState(false);
     const [isCatPlayInProgress, setIsCatPlayInProgress] = useState(false);
 
-
+    useEffect(() => {
+      console.log('All players:', allPlayers);
+        const cats = allPlayers.filter(player => player.puzzletype === 'CAT' && player.gamestatus === 'Created');
+        const dogs = allPlayers.filter(player => player.puzzletype === 'DOG' && player.gamestatus === 'Created');
+        
+        setCatPlayers(cats);
+        setDogPlayers(dogs);
+    }, [allPlayers]);
 
     useEffect(() => {
-        const catCount = PlayerTable.filter(player => player.PuzzleType === 'Cat' && player.PuzzleStatus === 'Created');
-        const dogCount = PlayerTable.filter(player => player.PuzzleType === 'Dog' && player.PuzzleStatus === 'Created');
-        console.log(catCount, dogCount);
-        setCatPlayers(catCount);
-        setDogPlayers(dogCount);
-    }, [update]);
-
-    const [showPuzzleForm, setShowPuzzleForm] = useState(false);
+      const fetchUsers = async () => {
+        try {
+          const response = await axios.get('http://localhost:5001/players');
+          setAllPlayers(response.data);
+        } catch (error) {
+          console.error('Error fetching users:', error);
+        }
+      };
+  
+      fetchUsers();
+    }, []);
 
     const showPuzzleFormHandler = () => {
         setShowPuzzleForm(!showPuzzleForm);
     };
 
-    const editPlayerHandler = (playerId, puzzleType) => {
-        const updatedPlayers = puzzleType === 'Cat' ? [...catPlayers] : [...dogPlayers];
-        const playerIndex = updatedPlayers.findIndex(player => player.id === playerId);
-        if (playerIndex !== -1) {
-            const playerToEdit = updatedPlayers[playerIndex];
-            setShowPuzzleForm(true);
-            console.log('Editing player:', playerToEdit);
-            // props.setEditingPlayer({ ...playerToEdit, puzzleType });
-        }
+    const editPlayerHandler = (player) => {
+        <EditPuzzleForm
+            player={player}
+            puzzleState={allPlayers}
+            updateCurrentPlayer={setAllPlayers}
+            setShowEditPuzzleForm={setShowEditPuzzleForm}
+        />;
     };
 
-    const deletePlayerHandler = (playerId, puzzleType) => {
+    const deletePlayerHandler = async (playerId) => {
+      try {
         
-        PlayerTable.splice(PlayerTable.findIndex(player => player.id === playerId), 1);
+        const response = await axios.delete(`http://localhost:5001/deletePlayer/${playerId}`);
+        console.log('Player deleted:', response.data);
+        if (response.data.message === 'Deleted') {
+          setAllPlayers(prevPlayers => prevPlayers.filter(player => player.playerguid !== playerId));
+        }
+        
+      } catch (error) {
+        console.error('Error deleting player:', error);
+        
+      }
+        
+      allPlayers.splice(allPlayers.findIndex(player => player.id === playerId), 1);
         setTimeout(() => {
             setUpdate(prev => !prev); // Trigger update to refresh the UI after delay
         }, 2000);
@@ -55,14 +78,9 @@ const PlayerBuilder = (props) => {
         const highlightPlayers = (players) => {
             return players.map(player => ({
                 ...player,
-                highlight: player.Username.toLowerCase().includes(lowerCaseSearchTerm)
+                highlight: player.username.toLowerCase().includes(lowerCaseSearchTerm)
             }));
         };
-        console.log(highlightPlayers(PlayerTable.filter(player => player.PuzzleType === 'Cat')));
-        const updatedCatPlayers = highlightPlayers(PlayerTable.filter(player => player.PuzzleType === 'Cat'));
-        const updatedDogPlayers = highlightPlayers(PlayerTable.filter(player => player.PuzzleType === 'Dog'));
-        setCatPlayers(updatedCatPlayers);
-        setDogPlayers(updatedDogPlayers);
     };
 
     return (
@@ -71,7 +89,7 @@ const PlayerBuilder = (props) => {
         <div className={classes.puzzleForm}>
         <PuzzleForm
           setShowPuzzleForm={setShowPuzzleForm}
-          setUpdate={setUpdate}
+          setAllPlayers={setAllPlayers}
         />
         </div>
       )}
@@ -102,7 +120,6 @@ const PlayerBuilder = (props) => {
             updateCurrentPlayer={setCatPlayers}
             puzzleState={catPlayers}
             setHighlightCurrentPlayer={setIsCatPlayInProgress}
-            setUpdate={setUpdate}
           />
           </Card>
         </div>
@@ -123,7 +140,6 @@ const PlayerBuilder = (props) => {
             updateCurrentPlayer={setDogPlayers}
             puzzleState={dogPlayers}
             setHighlightCurrentPlayer={setIsDogPlayInProgress}
-            setUpdate={setUpdate}
           />
           </Card>
         </div>
@@ -144,7 +160,7 @@ const PlayerBuilder = (props) => {
           <tbody>
           {catPlayers.map((player, index) => (
             <tr
-            key={player.id}
+            key={player.playerguid}
             className={
               index === 0 && isCatPlayInProgress
               ? classes.inProgressPlayer
@@ -161,18 +177,18 @@ const PlayerBuilder = (props) => {
               player.highlight ? classes.highlight : ""
               }
             >
-              {player.Username}
+              {player.username}
             </td>
             <td>
               <span
               className={classes.editPlayer}
-              onClick={() => editPlayerHandler(player.id, "Cat")}
+              onClick={() => editPlayerHandler(player)}
               >
               Edit
               </span>
               <span
               className={classes.deletePlayer}
-              onClick={() => deletePlayerHandler(player.id, "Cat")}
+              onClick={() => deletePlayerHandler(player.playerguid)}
               >
               Delete
               </span>
@@ -197,7 +213,7 @@ const PlayerBuilder = (props) => {
           <tbody>
           {dogPlayers.map((player, index) => (
             <tr
-            key={player.id}
+            key={player.playerguid}
             className={
               index === 0 && isDogPlayInProgress
               ? classes.inProgressPlayer
@@ -214,18 +230,18 @@ const PlayerBuilder = (props) => {
               player.highlight ? classes.highlight : ""
               }
             >
-              {player.Username}
+              {player.username}
             </td>
             <td>
               <span
               className={classes.editPlayer}
-              onClick={() => editPlayerHandler(player.id, "Dog")}
+              onClick={() => editPlayerHandler(player)}
               >
               Edit
               </span>
               <span
               className={classes.deletePlayer}
-              onClick={() => deletePlayerHandler(player.id, "Dog")}
+              onClick={() => deletePlayerHandler(player.playerguid)}
               >
               Delete
               </span>
@@ -237,7 +253,6 @@ const PlayerBuilder = (props) => {
         </div>
       </div>
       <DailyPlayers />
-      <UsersList />
       </div>
     );
 }

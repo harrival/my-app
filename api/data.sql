@@ -1,7 +1,5 @@
 DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS GamePlayers;
-DROP TABLE IF EXISTS PuzzleType;
-
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     name text NOT NULL,
@@ -59,10 +57,12 @@ CREATE TABLE IF NOT EXISTS GamePlayers (
     PlayerGUID VARCHAR(50) PRIMARY KEY,
     Username VARCHAR(50),
     Email VARCHAR(100),
-    PhoneNo VARCHAR(15),
+    PhoneNumber VARCHAR(15),
     PuzzleType VARCHAR(20),
+    GameStatus VARCHAR(20) DEFAULT 'Created',
     TimeUsed TIME,
     TimeCreated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    TimeModified TIMESTAMP,
     RepID VARCHAR(10),
     EventID VARCHAR(10),
     EventDate DATE,

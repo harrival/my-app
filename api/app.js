@@ -9,8 +9,8 @@ const cors = require('cors');
 app.use(express.json());
 app.use(cors());
 
-const uRoutes = require("./routes/users");
-app.use("/users", uRoutes);
+const uRoutes = require("./routes/apiRoutes");
+app.use("/", uRoutes);
 
 /** 404 handler */
 

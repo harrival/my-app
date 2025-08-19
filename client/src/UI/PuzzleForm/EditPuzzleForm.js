@@ -1,24 +1,17 @@
 import React, { useState } from 'react';
-import axios from 'axios';
 import './PuzzleForm.css'; // Assuming you have some basic styles in this file
+import axios from 'axios';
 
-const representativeID = 'GUID10001'
-const eventID = 'GUID2000'
-const timeused = "00:00:00"
-const timeupdated = null;
-
-const PuzzleForm = ({setShowPuzzleForm, setAllPlayers}) => {
-
+const EditPuzzleForm = ({ player, puzzleState, updateCurrentPlayer, setShowEditPuzzleForm }) => {
     const [formState, setFormState] = useState({
-        contact: '',
-        username: '',
-        puzzlePet: '',
+        contact: player.email || player.phonenumber || '',
+        username: player.username || '',
+        puzzletype: player.puzzletype || '',
     });
-
     const [errors, setErrors] = useState({
-        contact: '',
-        username: '',
-        puzzlePet: '',
+      contact: "",
+      username: "",
+      puzzlePet: "",
     });
 
     const validateContact = (value) => {
@@ -32,23 +25,24 @@ const PuzzleForm = ({setShowPuzzleForm, setAllPlayers}) => {
     };
 
     const validateUsername = (value) => {
-        if (!value) return 'Username is required';
-        if (value.length < 5) return 'Username must be at least 5 characters long';
-        return '';
+      if (!value) return "Username is required";
+      if (value.length < 5)
+        return "Username must be at least 5 characters long";
+      return "";
     };
 
     const validatePuzzlePet = (value) => {
-        if (!value) return 'Please select a puzzle pet';
-        return '';
+      if (!value) return "Please select a puzzle pet";
+      return "";
     };
 
     const handleInputChange = (e) => {
-        const { id, value } = e.target;
-        setFormState((prevState) => ({ ...prevState, [id]: value }));
+      const { id, value } = e.target;
+      setFormState((prevState) => ({ ...prevState, [id]: value }));
 
-        let error = '';
-        if (id === 'username') error = validateUsername(value);
-        setErrors((prevErrors) => ({ ...prevErrors, [id]: error }));
+      let error = "";
+      if (id === "username") error = validateUsername(value);
+      setErrors((prevErrors) => ({ ...prevErrors, [id]: error }));
     };
 
     const handleSelectChange = (e) => {
@@ -59,10 +53,8 @@ const PuzzleForm = ({setShowPuzzleForm, setAllPlayers}) => {
         setErrors((prevErrors) => ({ ...prevErrors, puzzlePet: error }));
     };
 
-    const handleSubmit = async (e) => {
+    const handleEditPuzzleForm = async (e) => {
         e.preventDefault();
-      
-
         const contactError = validateContact(formState.contact);
         const usernameError = validateUsername(formState.username);
         const puzzlePetError = validatePuzzlePet(formState.puzzlePet);
@@ -74,46 +66,40 @@ const PuzzleForm = ({setShowPuzzleForm, setAllPlayers}) => {
         });
 
         if (!contactError && !usernameError && !puzzlePetError) {
-            const uniqueId = 'PLAYERGUID'+Date.now().toString();
-            const newPlayer = {
-                playerguid: uniqueId,
+            const editedPlayer = {
                 username: formState.username,
                 email: formState.contact.includes('@') ? formState.contact : '',
                 phonenumber: formState.contact.match(/^\d{10}$/) ? formState.contact : '',
                 puzzletype: formState.puzzlePet,
-                timeused,
-                timecreated: new Date().toISOString(),
-                timeupdated,
-                repid: representativeID,
-                eventid: eventID,
             };
             try {
-                const response = await axios.post('http://localhost:5001/addplayer', newPlayer);
-                if (response.status === 201) {
-                    setAllPlayers(prev => [...prev, { ...newPlayer, gamestatus: 'Created' }])
+                const response = await axios.patch(`http://localhost:5001/editPlayerForm/${player.playerguid}`, editedPlayer);
+                console.log('Player updated:', response.data);
+          
+                if (response.status === 200) {
+                  const updatedPuzzleState = puzzleState.filter(
+                    (player) => player.playerguid !== player.playerguid
+                  );
+                  updateCurrentPlayer(updatedPuzzleState);
                 }
-            } catch (error) {
-                console.error('Error adding player:', error);
-            }
-            setShowPuzzleForm(false);
-            setFormState({
-                contact: '',
-                username: '',
-                puzzlePet: '',
-            });
-            setErrors({
-                contact: '',
-                username: '',
-                puzzlePet: '',
-            });
-        } else {
-            console.log('Form is invalid!');
+              } catch (error) {
+                  console.error('Error updating player playTime:', error);
+              }
+              setShowEditPuzzleForm(false);
+              setFormState({
+                  contact: '',
+                  username: '',
+                  puzzlePet: '',
+              });
+              setErrors({
+                  contact: '',
+                  username: '',
+                  puzzlePet: '',
+              });  
         }
-
     };
-
     const cancleForm = () => {
-        setShowPuzzleForm(false);
+        setShowEditPuzzleForm(false);
         setFormState({
             contact: '',
             username: '',
@@ -128,7 +114,7 @@ const PuzzleForm = ({setShowPuzzleForm, setAllPlayers}) => {
 
     return (
         <form 
-            onSubmit={handleSubmit} 
+            onSubmit={handleEditPuzzleForm} 
             className='puzzleForm'
         >
             <div className='input-group'>
@@ -180,4 +166,4 @@ const PuzzleForm = ({setShowPuzzleForm, setAllPlayers}) => {
     );
 };
 
-export default PuzzleForm;
+export default EditPuzzleForm;
