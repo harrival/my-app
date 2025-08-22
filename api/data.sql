@@ -18,8 +18,9 @@ CREATE TABLE IF NOT EXISTS CustomersTable (
     Email VARCHAR(100),
     PhoneNumber VARCHAR(15),
     Address VARCHAR(255),
-    PermissionGroup VARCHAR(20),
-    IsAdmin BOOLEAN
+    PermissionGroup VARCHAR(20) DEFAULT 'Customer',
+    IsAdmin BOOLEAN DEFAULT false,
+    TimeCreated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS EventTable (

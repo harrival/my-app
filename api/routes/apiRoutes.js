@@ -82,20 +82,23 @@ router.get("/search", async function (req, res, next) {
 
 // (Fixed) Search by user type. */
 
-router.get("/good-search",
-      async function (req, res, next) {
+router.get("/dbsearch", async function (req, res, next) {
   try {
-    const type = req.query.type;
+    const { tableName, fields } = req.query;
 
-    const results = await db.query(
-      `SELECT id, name, type 
-       FROM users
-       WHERE type=$1`, [type]);
+    if (!tableName || !fields) {
+      return res.status(400).json({ error: "Missing required query parameters" });
+    }
+
+    const fieldNames = Object.keys(fields).join(", ");
+    const values = Object.values(fields);
+    const placeholders = values.map((_, idx) => `$${idx + 1}`).join(", ");
+    const query = `SELECT ${fieldNames} FROM ${tableName} WHERE ${fieldNames}= ${placeholders}`;
+
+    const results = await db.query(query, values);
 
     return res.json(results.rows);
-  }
-
-  catch (err) {
+  } catch (err) {
     return next(err);
   }
 });
@@ -104,21 +107,24 @@ router.get("/good-search",
 
 /** Create new user, return user */
 
-router.post("/addplayer", async function (req, res, next) {
+router.post("/addToTable", async function (req, res, next) {
   try {
-    const { playerguid, username, email, phonenumber, puzzletype, timeused, repid, eventid} = req.body;
+    const { table, fields } = req.body;
 
-    const result = await db.query(
-          `INSERT INTO gameplayers (playerguid, username, email, phonenumber, puzzletype, timeused, repid, eventid) 
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-           RETURNING playerguid, username`,
-        [playerguid, username, email, phonenumber, puzzletype, timeused, repid, eventid]
-    );
+    if (!table || !fields || typeof fields !== 'object') {
+      return res.status(400).json({ error: "Invalid input data" });
+    }
+
+    const fieldNames = Object.keys(fields).join(", ");
+    const values = Object.values(fields);
+    const placeholders = values.map((_, idx) => `$${idx + 1}`).join(", ");
+
+    const query = `INSERT INTO ${table} (${fieldNames}) VALUES (${placeholders}) RETURNING *`;
+
+    const result = await db.query(query, values);
 
     return res.status(201).json(result.rows[0]);
-  }
-
-  catch (err) {
+  } catch (err) {
     return next(err);
   }
 });

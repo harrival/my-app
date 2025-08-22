@@ -1,26 +1,36 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { type Player } from './PlayerInterface';
 
-const InProgressPlayers = ({
+interface InProgressPlayersProps {
+  currentPlayer: Player | undefined;
+  updateCurrentPlayer: (updatedPuzzleState: Player[]) => void;
+  puzzleState: Player[];
+  setHighlightCurrentPlayer: (highlight: boolean) => void;
+}
+
+const InProgressPlayers: React.FC<InProgressPlayersProps> = ({
   currentPlayer,
   updateCurrentPlayer,
   puzzleState,
   setHighlightCurrentPlayer,
 }) => {
-  const [playTime, setPlayTime] = useState(0);
-  const [isRunning, setIsRunning] = useState(false);
+  const [playTime, setPlayTime] = useState<number>(0);
+  const [isRunning, setIsRunning] = useState<boolean>(false);
 
   useEffect(() => {
-    let timer;
+    let timer: number | undefined;
     if (isRunning) {
       timer = setInterval(() => {
         setPlayTime((prevTime) => prevTime + 1);
       }, 1000);
     }
-    return () => clearInterval(timer);
+    return () => {
+      if (timer) clearInterval(timer);
+    };
   }, [isRunning]);
 
-  const formatTime = (totalSeconds) => {
+  const formatTime = (totalSeconds: number): string => {
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = totalSeconds % 60;
@@ -34,7 +44,7 @@ const InProgressPlayers = ({
     setIsRunning(true);
     setHighlightCurrentPlayer(true);
     const updatedPuzzleState = puzzleState.map((player) =>
-      player.id === currentPlayer.id
+      player.id === currentPlayer?.id
         ? { ...player, gamestatus: "InProgress" }
         : player
     );
@@ -50,21 +60,24 @@ const InProgressPlayers = ({
       timeused: formatTime(playTime),
       timemodified: new Date().toISOString(),
       gamestatus: 'Completed'
-    }
+    };
 
-    //ToDo: Update the player status in PlayersTable in Database
+    // ToDo: Update the player status in PlayersTable in Database
     try {
-      const response = await axios.patch(`http://localhost:5001/editPlayer/${currentPlayer.playerguid}`, playedPlayer);
+      const response = await axios.patch(
+        `http://localhost:5001/editPlayer/${currentPlayer?.playerguid}`,
+        playedPlayer
+      );
       console.log('Player updated:', response.data);
 
       if (response.status === 200) {
         const updatedPuzzleState = puzzleState.filter(
-          (player) => player.playerguid !== currentPlayer.playerguid
+          (player) => player.playerguid !== currentPlayer?.playerguid
         );
         updateCurrentPlayer(updatedPuzzleState);
       }
     } catch (error) {
-        console.error('Error updating player playTime:', error);
+      console.error('Error updating player playTime:', error);
     }
   };
 

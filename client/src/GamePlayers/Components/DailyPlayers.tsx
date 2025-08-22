@@ -4,16 +4,22 @@ import Draggable from 'react-draggable';
 import { ResizableBox } from 'react-resizable';
 import 'react-resizable/css/styles.css';
 
-import 'react-resizable/css/styles.css'; // Import styles for react-resizable
 import classes from '../Styles/PlayerBuilder.module.scss';
 
-const DailyPlayers = ({ PlayersTable }) => {
-    const [playedPlayers, setPlayedPlayers] = useState([]);
+interface Player {
+    playerguid: string;
+    username: string;
+    puzzletype: string;
+    timeused: string;
+}
+
+const DailyPlayers = () => {
+    const [playedPlayers, setPlayedPlayers] = useState<Player[]>([]);
 
     useEffect(() => {
         const fetchUsers = async () => {
             try {
-                const response = await axios.get('http://localhost:5001/completedPlayers');
+                const response = await axios.get<Player[]>('http://localhost:5001/completedPlayers');
                 setPlayedPlayers(response.data);
             } catch (error) {
                 console.error('Error fetching users:', error);
@@ -29,7 +35,7 @@ const DailyPlayers = ({ PlayersTable }) => {
                 <div className={classes.resizableContainer}>
                     <h1 className={classes.completedDaily}>Daily Players</h1>
                     <table
-                        border="1"
+                        border={1}
                         className={`${classes.playerTable} ${classes.borderedTable}`}
                     >
                         <thead>

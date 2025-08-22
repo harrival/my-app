@@ -2,19 +2,56 @@ import React, { useState } from 'react';
 import './PuzzleForm.css'; // Assuming you have some basic styles in this file
 import axios from 'axios';
 
-const EditPuzzleForm = ({ player, puzzleState, updateCurrentPlayer, setShowEditPuzzleForm }) => {
-    const [formState, setFormState] = useState({
+interface Player {
+    playerguid: string;
+    email?: string;
+    phonenumber?: string;
+    username?: string;
+    puzzletype?: string;
+}
+
+interface PuzzleState {
+    playerguid: string;
+}
+
+interface EditPuzzleFormProps {
+    player: Player;
+    puzzleState: PuzzleState[];
+    updateCurrentPlayer: (updatedPuzzleState: PuzzleState[]) => void;
+    setShowEditPuzzleForm: (show: boolean) => void;
+}
+
+interface FormState {
+    contact: string;
+    username: string;
+    puzzlePet: string;
+}
+
+interface Errors {
+    contact: string;
+    username: string;
+    puzzlePet: string;
+}
+
+const EditPuzzleForm = ({
+    player,
+    puzzleState,
+    updateCurrentPlayer,
+    setShowEditPuzzleForm,
+}: EditPuzzleFormProps) => {
+    const [formState, setFormState] = useState<FormState>({
         contact: player.email || player.phonenumber || '',
         username: player.username || '',
-        puzzletype: player.puzzletype || '',
-    });
-    const [errors, setErrors] = useState({
-      contact: "",
-      username: "",
-      puzzlePet: "",
+        puzzlePet: player.puzzletype || '',
     });
 
-    const validateContact = (value) => {
+    const [errors, setErrors] = useState<Errors>({
+        contact: '',
+        username: '',
+        puzzlePet: '',
+    });
+
+    const validateContact = (value: string): string => {
         if (!value) return '';
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         const phoneRegex = /^\d{10}$/;
@@ -24,28 +61,27 @@ const EditPuzzleForm = ({ player, puzzleState, updateCurrentPlayer, setShowEditP
         return '';
     };
 
-    const validateUsername = (value) => {
-      if (!value) return "Username is required";
-      if (value.length < 5)
-        return "Username must be at least 5 characters long";
-      return "";
+    const validateUsername = (value: string): string => {
+        if (!value) return 'Username is required';
+        if (value.length < 5) return 'Username must be at least 5 characters long';
+        return '';
     };
 
-    const validatePuzzlePet = (value) => {
-      if (!value) return "Please select a puzzle pet";
-      return "";
+    const validatePuzzlePet = (value: string): string => {
+        if (!value) return 'Please select a puzzle pet';
+        return '';
     };
 
-    const handleInputChange = (e) => {
-      const { id, value } = e.target;
-      setFormState((prevState) => ({ ...prevState, [id]: value }));
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
+        const { id, value } = e.target;
+        setFormState((prevState) => ({ ...prevState, [id]: value }));
 
-      let error = "";
-      if (id === "username") error = validateUsername(value);
-      setErrors((prevErrors) => ({ ...prevErrors, [id]: error }));
+        let error = '';
+        if (id === 'username') error = validateUsername(value);
+        setErrors((prevErrors) => ({ ...prevErrors, [id]: error }));
     };
 
-    const handleSelectChange = (e) => {
+    const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>): void => {
         const value = e.target.value;
         setFormState((prevState) => ({ ...prevState, puzzlePet: value }));
 
@@ -53,7 +89,7 @@ const EditPuzzleForm = ({ player, puzzleState, updateCurrentPlayer, setShowEditP
         setErrors((prevErrors) => ({ ...prevErrors, puzzlePet: error }));
     };
 
-    const handleEditPuzzleForm = async (e) => {
+    const handleEditPuzzleForm = async (e: React.FormEvent): Promise<void> => {
         e.preventDefault();
         const contactError = validateContact(formState.contact);
         const usernameError = validateUsername(formState.username);
@@ -73,32 +109,36 @@ const EditPuzzleForm = ({ player, puzzleState, updateCurrentPlayer, setShowEditP
                 puzzletype: formState.puzzlePet,
             };
             try {
-                const response = await axios.patch(`http://localhost:5001/editPlayerForm/${player.playerguid}`, editedPlayer);
+                const response = await axios.patch(
+                    `http://localhost:5001/editPlayerForm/${player.playerguid}`,
+                    editedPlayer
+                );
                 console.log('Player updated:', response.data);
-          
+
                 if (response.status === 200) {
-                  const updatedPuzzleState = puzzleState.filter(
-                    (player) => player.playerguid !== player.playerguid
-                  );
-                  updateCurrentPlayer(updatedPuzzleState);
+                    const updatedPuzzleState = puzzleState.filter(
+                        (p) => p.playerguid !== player.playerguid
+                    );
+                    updateCurrentPlayer(updatedPuzzleState);
                 }
-              } catch (error) {
-                  console.error('Error updating player playTime:', error);
-              }
-              setShowEditPuzzleForm(false);
-              setFormState({
-                  contact: '',
-                  username: '',
-                  puzzlePet: '',
-              });
-              setErrors({
-                  contact: '',
-                  username: '',
-                  puzzlePet: '',
-              });  
+            } catch (error) {
+                console.error('Error updating player playTime:', error);
+            }
+            setShowEditPuzzleForm(false);
+            setFormState({
+                contact: '',
+                username: '',
+                puzzlePet: '',
+            });
+            setErrors({
+                contact: '',
+                username: '',
+                puzzlePet: '',
+            });
         }
     };
-    const cancleForm = () => {
+
+    const cancelForm = (): void => {
         setShowEditPuzzleForm(false);
         setFormState({
             contact: '',
@@ -113,11 +153,8 @@ const EditPuzzleForm = ({ player, puzzleState, updateCurrentPlayer, setShowEditP
     };
 
     return (
-        <form 
-            onSubmit={handleEditPuzzleForm} 
-            className='puzzleForm'
-        >
-            <div className='input-group'>
+        <form onSubmit={handleEditPuzzleForm} className="puzzleForm">
+            <div className="input-group">
                 <label htmlFor="contact">Contact</label>
                 <input
                     id="contact"
@@ -128,7 +165,7 @@ const EditPuzzleForm = ({ player, puzzleState, updateCurrentPlayer, setShowEditP
                 />
                 {errors.contact && <p>{errors.contact}</p>}
             </div>
-            <div className='input-group'>
+            <div className="input-group">
                 <label htmlFor="username">Username</label>
                 <input
                     id="username"
@@ -139,7 +176,7 @@ const EditPuzzleForm = ({ player, puzzleState, updateCurrentPlayer, setShowEditP
                 />
                 {errors.username && <p>{errors.username}</p>}
             </div>
-            <div className='input-group'>
+            <div className="input-group">
                 <label htmlFor="puzzlePet">Puzzle pet</label>
                 <select
                     id="puzzlePet"
@@ -152,13 +189,11 @@ const EditPuzzleForm = ({ player, puzzleState, updateCurrentPlayer, setShowEditP
                 </select>
                 {errors.puzzlePet && <p>{errors.puzzlePet}</p>}
             </div>
-            <div className='button-group'>
-                <button className='addPlayerBtn' type="submit">Submit</button>
-                <button
-                    className='cancelBtn'
-                    type="button"
-                    onClick={cancleForm}
-                >
+            <div className="button-group">
+                <button className="addPlayerBtn" type="submit">
+                    Submit
+                </button>
+                <button className="cancelBtn" type="button" onClick={cancelForm}>
                     Cancel
                 </button>
             </div>
