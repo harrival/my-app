@@ -8,9 +8,10 @@ import AuthenticateUser from '../Authenticate/Auth';
 import ProfilePage from '../../user/pages/Profile';
 import PlayerBuilder from '../../GamePlayers/Components/PlayerBuilder';
 import DailyPlayers from '../../GamePlayers/Components/DailyPlayers';
+import Reps from '../../Rep/component/Reps';
 
 const Router = () => {
-    const auth = true
+    const auth = true;
     let routes;
 
     if (auth) {
@@ -22,6 +23,7 @@ const Router = () => {
                 <Route path="/DailyPlayers" element={<DailyPlayers />} />
                 <Route path="/Profile" element={<ProfilePage />} />
                 <Route path="/PlayerBuilder" element={<PlayerBuilder />} />
+                <Route path="/Reps" element={<Reps />} />
                 <Route path="*" element={<Dashboard to="/" replace />} />
             </>
         );

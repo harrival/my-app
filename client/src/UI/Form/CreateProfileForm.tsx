@@ -115,7 +115,7 @@ const CreateProfile = () => {
             }
             const { id, contact, ...newProfileData } = newProfile;
             const dbObject = {
-                table: "customerstable",
+                tableName: "customerstable",
                 fields: newProfileData
             }
 

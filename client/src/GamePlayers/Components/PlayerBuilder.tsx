@@ -30,8 +30,11 @@ const PlayerBuilder: React.FC = () => {
 
   useEffect(() => {
     const fetchUsers = async () => {
+      const dbObject = {
+        tableName: "gameplayers"
+      };
       try {
-        const response = await axios.get<Player[]>('http://localhost:5001/players');
+        const response = await axios.get<Player[]>('http://localhost:5001/getAll/', { params: dbObject });
         setAllPlayers(response.data);
       } catch (error) {
         console.error('Error fetching users:', error);

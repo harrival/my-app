@@ -4,21 +4,35 @@ const db = require("../db");
 const express = require("express");
 const router = express.Router();
 
-
-// this version doesn't work --- db.query returns a promise,
-// so we need to await it in an async function
-
 /** Get users: [user, user, user] */
 
 /** Get all users */
-router.get("/players", async function (req, res, next) {
+router.get("/reps", async function (req, res, next) {
   try {
-    const results = await db.query(`SELECT * FROM gameplayers`);
+    const query = `
+      SELECT rp.is_active, rp.rep_guid, ct.first_name, ct.last_name, et.event_type, et.event_location, et.event_first_date, et.event_last_date
+      FROM reps_table rp
+      INNER JOIN customers_table ct ON rp.rep = ct.customer_guid
+      INNER JOIN events_table et ON rp.event_id = et.event_guid
+    `;
+    const results = await db.query(query);
     return res.json(results.rows);
   } catch (err) {
     return next(err);
   }
 });
+
+/** Get all items */
+router.get("/getAll", async function (req, res, next) {
+  const { tableName } = req.query;
+  try {
+    const results = await db.query(`SELECT * FROM ${tableName}`);
+    return res.json(results.rows);
+  } catch (err) {
+    return next(err);
+  }
+});
+
 /** Get top 20 players users */
 router.get("/completedPlayers", async function (req, res, next) {
   try {

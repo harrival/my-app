@@ -1,11 +1,9 @@
-import React, { useState, useContext } from 'react';
+import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import maze from '../assets/maze.jpeg';
 import classes from './Header.module.scss';
 import Button from '../UI/Button/Button'
 import SideDrawer from './SideDrawer';
-import { AuthContext } from '../shared/Context/auth-context';
-import { FaUserCircle } from "react-icons/fa";
 import HoverMenuButton from './HoverMenuButton.js'
 
 const Header = (props) => {
@@ -31,6 +29,12 @@ const Header = (props) => {
                         to="/PlayerBuilder"
                         className={classes.link}
                         onClick={() => props.setColor("#e7ffe3")}>Play Ground
+                    </NavLink>
+
+                    <NavLink
+                        to="/Reps"
+                        className={classes.link}
+                        onClick={() => props.setColor("#e7ffe3")}>Reps
                     </NavLink>
                 </>
             }
