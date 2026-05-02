@@ -3,15 +3,15 @@ import './PuzzleForm.css'; // Assuming you have some basic styles in this file
 import axios from 'axios';
 
 interface Player {
-    playerguid: string;
+    player_guid: string;
     email?: string;
-    phonenumber?: string;
+    phone_number?: string;
     username?: string;
-    puzzletype?: string;
+    puzzle_type?: string;
 }
 
 interface PuzzleState {
-    playerguid: string;
+    player_guid: string;
 }
 
 interface EditPuzzleFormProps {
@@ -40,9 +40,9 @@ const EditPuzzleForm = ({
     setShowEditPuzzleForm,
 }: EditPuzzleFormProps) => {
     const [formState, setFormState] = useState<FormState>({
-        contact: player.email || player.phonenumber || '',
+        contact: player.email || player.phone_number || '',
         username: player.username || '',
-        puzzlePet: player.puzzletype || '',
+        puzzlePet: player.puzzle_type || '',
     });
 
     const [errors, setErrors] = useState<Errors>({
@@ -105,19 +105,19 @@ const EditPuzzleForm = ({
             const editedPlayer = {
                 username: formState.username,
                 email: formState.contact.includes('@') ? formState.contact : '',
-                phonenumber: formState.contact.match(/^\d{10}$/) ? formState.contact : '',
-                puzzletype: formState.puzzlePet,
+                phone_number: formState.contact.match(/^\d{10}$/) ? formState.contact : '',
+                puzzle_type: formState.puzzlePet,
             };
             try {
                 const response = await axios.patch(
-                    `http://localhost:5001/editPlayerForm/${player.playerguid}`,
+                    `http://localhost:5001/editPlayerForm/${player.player_guid}`,
                     editedPlayer
                 );
                 console.log('Player updated:', response.data);
 
                 if (response.status === 200) {
                     const updatedPuzzleState = puzzleState.filter(
-                        (p) => p.playerguid !== player.playerguid
+                        (p) => p.player_guid !== player.player_guid
                     );
                     updateCurrentPlayer(updatedPuzzleState);
                 }

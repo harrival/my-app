@@ -21,7 +21,7 @@ const InProgressPlayers: React.FC<InProgressPlayersProps> = ({
   useEffect(() => {
     let timer: number | undefined;
     if (isRunning) {
-      timer = setInterval(() => {
+      timer = window.setInterval(() => {
         setPlayTime((prevTime) => prevTime + 1);
       }, 1000);
     }
@@ -45,7 +45,7 @@ const InProgressPlayers: React.FC<InProgressPlayersProps> = ({
     setHighlightCurrentPlayer(true);
     const updatedPuzzleState = puzzleState.map((player) =>
       player.id === currentPlayer?.id
-        ? { ...player, gamestatus: "InProgress" }
+        ? { ...player, game_status: "InProgress" }
         : player
     );
     updateCurrentPlayer(updatedPuzzleState);
@@ -57,22 +57,22 @@ const InProgressPlayers: React.FC<InProgressPlayersProps> = ({
     setHighlightCurrentPlayer(false);
     setPlayTime(0); // Reset playTime after stopping
     const playedPlayer = {
-      timeused: formatTime(playTime),
+      time_used: formatTime(playTime),
       timemodified: new Date().toISOString(),
-      gamestatus: 'Completed'
+      game_status: 'Completed'
     };
 
     // ToDo: Update the player status in PlayersTable in Database
     try {
       const response = await axios.patch(
-        `http://localhost:5001/editPlayer/${currentPlayer?.playerguid}`,
+        `http://localhost:5001/editPlayer/${currentPlayer?.player_guid}`,
         playedPlayer
       );
       console.log('Player updated:', response.data);
 
       if (response.status === 200) {
         const updatedPuzzleState = puzzleState.filter(
-          (player) => player.playerguid !== currentPlayer?.playerguid
+          (player) => player.player_guid !== currentPlayer?.player_guid
         );
         updateCurrentPlayer(updatedPuzzleState);
       }

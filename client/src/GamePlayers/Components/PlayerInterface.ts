@@ -1,17 +1,17 @@
 interface Player {
     id: string;
-    playerguid: string;
+    player_guid: string;
     username: string;
-    puzzletype: 'CAT' | 'DOG';
-    gamestatus: 'Created' | string;
+    puzzle_type: 'CAT' | 'DOG';
+    game_status: 'Created' | string;
     highlight?: boolean;
     email: string;
-    phonenumber: string;
-    timeused: string;
-    timeupdated: string | null;
-    repid: string;
-    eventid: string;
-    timecreated: string;
+    phone_number: string;
+    time_used: string;
+    time_modified: string | null;
+    rep_id: string;
+    event_id: string;
+    time_created: string;
 }
 
 export {

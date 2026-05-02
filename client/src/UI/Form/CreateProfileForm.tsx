@@ -87,7 +87,7 @@ const CreateProfile = () => {
             dbSearch = 'email';
         } else if (phoneRegex.test(customerInfo.contact)) {
             contactIsPhone = true;
-            dbSearch = 'phonenumber';
+            dbSearch = 'phone_number';
         }
 
         const fNameError = validateField("First Name", customerInfo.firstname);

@@ -37,10 +37,10 @@ router.get("/getAll", async function (req, res, next) {
 router.get("/completedPlayers", async function (req, res, next) {
   try {
     const results = await db.query(
-      `SELECT playerguid, username, timeused, puzzletype 
-       FROM gameplayers 
-       WHERE gamestatus = $1 AND DATE(timecreated) = CURRENT_DATE 
-       ORDER BY timeused ASC 
+      `SELECT player_guid, username, time_used, puzzle_type 
+       FROM game_players_table 
+       WHERE game_status = $1 AND DATE(time_created) = CURRENT_DATE 
+       ORDER BY time_used ASC 
        LIMIT $2`, ['Completed', 20]);
 
     if (!results.rows || results.rows.length === 0) {
@@ -123,9 +123,12 @@ router.get("/dbsearch", async function (req, res, next) {
 
 router.post("/addToTable", async function (req, res, next) {
   try {
-    const { table, fields } = req.body;
+    const { tableName, fields } = req.body;
+    console.log(fields);
+    console.log(tableName);
 
-    if (!table || !fields || typeof fields !== 'object') {
+    if (!tableName || !fields || typeof fields !== 'object') {
+      conseole.log("i ran")
       return res.status(400).json({ error: "Invalid input data" });
     }
 
@@ -133,7 +136,7 @@ router.post("/addToTable", async function (req, res, next) {
     const values = Object.values(fields);
     const placeholders = values.map((_, idx) => `$${idx + 1}`).join(", ");
 
-    const query = `INSERT INTO ${table} (${fieldNames}) VALUES (${placeholders}) RETURNING *`;
+    const query = `INSERT INTO ${tableName} (${fieldNames}) VALUES (${placeholders}) RETURNING *`;
 
     const result = await db.query(query, values);
 
@@ -148,13 +151,13 @@ router.post("/addToTable", async function (req, res, next) {
 
 router.patch("/editPlayer/:id", async function (req, res, next) {
   try {
-    const { gamestatus, timeused,  timemodified} = req.body;
+    const { game_status, time_used,  timemodified} = req.body;
 
     const result = await db.query(
-          `UPDATE gameplayers SET gamestatus=$1, timeused=$2, timemodified=$3
-           WHERE playerguid = $4
+          `UPDATE game_players_table SET game_status=$1, time_used=$2, timemodified=$3
+           WHERE player_guid = $4
            RETURNING id`,
-        [gamestatus, timeused, timemodified, req.params.id]
+        [game_status, time_used, timemodified, req.params.id]
     );
 
     return res.json(result.rows[0]);
@@ -166,13 +169,13 @@ router.patch("/editPlayer/:id", async function (req, res, next) {
 });
 router.patch("/editPlayerForm/:id", async function (req, res, next) {
   try {
-    const { username, email,  phonenumber, puzzletype} = req.body;
+    const { username, email,  phone_number, puzzle_type} = req.body;
 
     const result = await db.query(
-          `UPDATE gameplayers SET username=$1, email=$2, phonenumber=$3, puzzletype=$4
-           WHERE playerguid = $5
+          `UPDATE game_players_table SET username=$1, email=$2, phone_number=$3, puzzle_type=$4
+           WHERE player_guid = $5
            RETURNING id`,
-        [username, email,  phonenumber, puzzletype, req.params.id]
+        [username, email,  phone_number, puzzle_type, req.params.id]
     );
 
     return res.json(result.rows[0]);
@@ -189,7 +192,7 @@ router.patch("/editPlayerForm/:id", async function (req, res, next) {
 router.delete("/deletePlayer/:id", async function (req, res, next) {
   try {
     const result = await db.query(
-        "DELETE FROM gameplayers WHERE playerguid = $1",
+        "DELETE FROM game_players_table WHERE player_guid = $1",
         [req.params.id]
     );
 

@@ -7,10 +7,10 @@ import 'react-resizable/css/styles.css';
 import classes from '../Styles/PlayerBuilder.module.scss';
 
 interface Player {
-    playerguid: string;
+    player_guid: string;
     username: string;
-    puzzletype: string;
-    timeused: string;
+    puzzle_type: string;
+    time_used: string;
 }
 
 const DailyPlayers = () => {
@@ -20,6 +20,7 @@ const DailyPlayers = () => {
         const fetchUsers = async () => {
             try {
                 const response = await axios.get<Player[]>('http://localhost:5001/completedPlayers');
+                console.log(response.data);
                 setPlayedPlayers(response.data);
             } catch (error) {
                 console.error('Error fetching users:', error);
@@ -47,10 +48,10 @@ const DailyPlayers = () => {
                         </thead>
                         <tbody>
                             {playedPlayers.map((player) => (
-                                <tr key={player.playerguid}>
+                                <tr key={player.player_guid}>
                                     <td>{player.username}</td>
-                                    <td>{player.puzzletype}</td>
-                                    <td>{player.timeused}</td>
+                                    <td>{player.puzzle_type}</td>
+                                    <td>{player.time_used}</td>
                                 </tr>
                             ))}
                         </tbody>

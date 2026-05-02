@@ -21,8 +21,8 @@ const PlayerBuilder: React.FC = () => {
 
   useEffect(() => {
     console.log('All players:', allPlayers);
-    const cats = allPlayers.filter(player => player.puzzletype === 'CAT' && player.gamestatus === 'Created');
-    const dogs = allPlayers.filter(player => player.puzzletype === 'DOG' && player.gamestatus === 'Created');
+    const cats = allPlayers.filter(player => player.puzzle_type === 'CAT' && player.game_status === 'Created');
+    const dogs = allPlayers.filter(player => player.puzzle_type === 'DOG' && player.game_status === 'Created');
 
     setCatPlayers(cats);
     setDogPlayers(dogs);
@@ -31,7 +31,7 @@ const PlayerBuilder: React.FC = () => {
   useEffect(() => {
     const fetchUsers = async () => {
       const dbObject = {
-        tableName: "gameplayers"
+        tableName: "game_players_table"
       };
       try {
         const response = await axios.get<Player[]>('http://localhost:5001/getAll/', { params: dbObject });
@@ -62,7 +62,7 @@ const PlayerBuilder: React.FC = () => {
       const response = await axios.delete(`http://localhost:5001/deletePlayer/${playerId}`);
       console.log('Player deleted:', response.data);
       if (response.data.message === 'Deleted') {
-        setAllPlayers(prevPlayers => prevPlayers.filter(player => player.playerguid !== playerId));
+        setAllPlayers(prevPlayers => prevPlayers.filter(player => player.player_guid !== playerId));
       }
     } catch (error) {
       console.error('Error deleting player:', error);
@@ -161,7 +161,7 @@ const PlayerBuilder: React.FC = () => {
             <tbody>
               {catPlayers.map((player, index) => (
                 <tr
-                  key={player.playerguid}
+                  key={player.player_guid}
                   className={
                     index === 0 && isCatPlayInProgress
                       ? classes.inProgressPlayer
@@ -185,7 +185,7 @@ const PlayerBuilder: React.FC = () => {
                     </span>
                     <span
                       className={classes.deletePlayer}
-                      onClick={() => deletePlayerHandler(player.playerguid)}
+                      onClick={() => deletePlayerHandler(player.player_guid)}
                     >
                       Delete
                     </span>
@@ -208,7 +208,7 @@ const PlayerBuilder: React.FC = () => {
             <tbody>
               {dogPlayers.map((player, index) => (
                 <tr
-                  key={player.playerguid}
+                  key={player.player_guid}
                   className={
                     index === 0 && isDogPlayInProgress
                       ? classes.inProgressPlayer
@@ -232,7 +232,7 @@ const PlayerBuilder: React.FC = () => {
                     </span>
                     <span
                       className={classes.deletePlayer}
-                      onClick={() => deletePlayerHandler(player.playerguid)}
+                      onClick={() => deletePlayerHandler(player.player_guid)}
                     >
                       Delete
                     </span>

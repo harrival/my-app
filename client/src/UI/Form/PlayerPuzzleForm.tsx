@@ -6,8 +6,8 @@ import { type Player } from '../../GamePlayers/Components/PlayerInterface'; // A
 
 const representativeID = 'GUID10001';
 const eventID = 'GUID2000';
-const timeused = "00:00:00";
-const timeupdated = null;
+const time_used = "00:00:00";
+const time_modified = null;
 
 // Define types for props
 interface PuzzleFormProps {
@@ -94,31 +94,31 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers }: PuzzleFormProps)
     });
 
     if (!contactError && !usernameError && !puzzlePetError) {
-      const uniqueId = 'PLAYERGUID' + Date.now().toString();
+      const uniqueId = 'PLAYERG' //+ Date.now().toString();
       const newPlayer: Player = {
         id: '',
-        gamestatus: 'Created',
-        playerguid: uniqueId,
+        game_status: 'Created',
+        player_guid: uniqueId,
         username: formState.username,
         email: formState.contact.includes('@') ? formState.contact : '',
-        phonenumber: formState.contact.match(/^\d{10}$/) ? formState.contact : '',
-        puzzletype: formState.puzzlePet as "CAT" | "DOG",
-        timeused,
-        timecreated: new Date().toISOString(),
-        timeupdated,
-        repid: representativeID,
-        eventid: eventID,
+        phone_number: formState.contact.match(/^\d{10}$/) ? formState.contact : '',
+        puzzle_type: formState.puzzlePet as "CAT" | "DOG",
+        time_used,
+        time_created: new Date().toISOString(),
+        time_modified,
+        rep_id: representativeID,
+        event_id: eventID,
       };
       try {
         const { id, ...newPlayerWithoutId } = newPlayer;
         const dbObject = {
-                tableName: "gameplayers",
+                tableName: "game_players_table",
                 fields: newPlayerWithoutId
             }
 
         const response = await axios.post('http://localhost:5001/addToTable', dbObject);
         if (response.status === 201) {
-          setAllPlayers((prev) => [...prev, { ...newPlayer, gamestatus: 'Created' }]);
+          setAllPlayers((prev) => [...prev, { ...newPlayer, game_status: 'Created' }]);
         }
       } catch (error) {
         console.error('Error adding player:', error);

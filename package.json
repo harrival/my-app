@@ -1,9 +1,11 @@
 {
   "name": "my-app",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "api/app.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "nodemon api/app.js",
+    "start": "node api/app.js"
   },
   "repository": {
     "type": "git",
@@ -22,5 +24,8 @@
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "pg": "^8.16.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
   }
 }
