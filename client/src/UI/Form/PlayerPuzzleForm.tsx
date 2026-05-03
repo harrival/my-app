@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import './PuzzleForm.css';
-import { type Player } from '../../GamePlayers/Components/PlayerInterface'; // Adjust the import path as necessary
- // Assuming you have some basic styles in this file
+import { type Player } from '../../GamePlayers/Components/PlayerInterface';
 
 const representativeID = 'GUID10001';
 const eventID = 'GUID2000';
@@ -94,7 +93,7 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers }: PuzzleFormProps)
     });
 
     if (!contactError && !usernameError && !puzzlePetError) {
-      const uniqueId = 'PLAYERG' //+ Date.now().toString();
+      const uniqueId = 'PLAYERG' + Date.now().toString();
       const newPlayer: Player = {
         id: '',
         game_status: 'Created',
@@ -116,29 +115,18 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers }: PuzzleFormProps)
                 fields: newPlayerWithoutId
             }
 
-        const response = await axios.post('http://localhost:5001/addToTable', dbObject);
+        const response = await axios.post('http://192.168.4.188:5001/addToTable', dbObject);
         if (response.status === 201) {
           setAllPlayers((prev) => [...prev, { ...newPlayer, game_status: 'Created' }]);
+          resetForm();
         }
       } catch (error) {
         console.error('Error adding player:', error);
       }
-      setShowPuzzleForm(false);
-      setFormState({
-        contact: '',
-        username: '',
-        puzzlePet: '',
-      });
-      setErrors({
-        contact: '',
-        username: '',
-        puzzlePet: '',
-      });
     }
   };
 
-  const cancelForm = (): void => {
-    setShowPuzzleForm(false);
+  const resetForm = () => {
     setFormState({
       contact: '',
       username: '',
@@ -151,9 +139,27 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers }: PuzzleFormProps)
     });
   };
 
+  const cancelForm = (): void => {
+    setShowPuzzleForm(false);
+    resetForm();
+  };
+
+  const inputGroupStyle: React.CSSProperties = {
+    display: 'flex',
+    flexDirection: 'column',
+    marginBottom: '1rem',
+    textAlign: 'left'
+  };
+
+  const errorStyle: React.CSSProperties = {
+    color: 'red',
+    fontSize: '0.8rem',
+    margin: '4px 0 0 0'
+  };
+
   return (
     <form onSubmit={handleSubmit} className="puzzleForm">
-      <div className="input-group">
+      <div className="input-group" style={inputGroupStyle}>
         <label htmlFor="contact">Contact</label>
         <input
           id="contact"
@@ -162,9 +168,10 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers }: PuzzleFormProps)
           value={formState.contact}
           onChange={handleInputChange}
         />
-        {errors.contact && <p>{errors.contact}</p>}
+        {errors.contact && <p style={errorStyle}>{errors.contact}</p>}
       </div>
-      <div className="input-group">
+
+      <div className="input-group" style={inputGroupStyle}>
         <label htmlFor="username">Username</label>
         <input
           id="username"
@@ -173,9 +180,10 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers }: PuzzleFormProps)
           value={formState.username}
           onChange={handleInputChange}
         />
-        {errors.username && <p>{errors.username}</p>}
+        {errors.username && <p style={errorStyle}>{errors.username}</p>}
       </div>
-      <div className="input-group">
+
+      <div className="input-group" style={inputGroupStyle}>
         <label htmlFor="puzzlePet">Puzzle pet</label>
         <select
           id="puzzlePet"
@@ -186,8 +194,9 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers }: PuzzleFormProps)
           <option value="CAT">Cat</option>
           <option value="DOG">Dog</option>
         </select>
-        {errors.puzzlePet && <p>{errors.puzzlePet}</p>}
+        {errors.puzzlePet && <p style={errorStyle}>{errors.puzzlePet}</p>}
       </div>
+
       <div className="button-group">
         <button className="addPlayerBtn" type="submit">
           Submit

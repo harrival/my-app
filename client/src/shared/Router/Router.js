@@ -9,6 +9,11 @@ import ProfilePage from '../../user/pages/Profile';
 import PlayerBuilder from '../../GamePlayers/Components/PlayerBuilder';
 import DailyPlayers from '../../GamePlayers/Components/DailyPlayers';
 import Reps from '../../Rep/component/Reps';
+import StartCatTimer from '../../GamePlayers/Components/StartCatTimer';
+import StopCatTimer from '../../GamePlayers/Components/StopCatTimer';
+import StartDogTimer from '../../GamePlayers/Components/StartDogTimer';
+import StopDogTimer from '../../GamePlayers/Components/StopDogTimer';
+import TvDisplay from '../../GamePlayers/Components/TvDisplay';
 
 const Router = () => {
     const auth = true;
@@ -23,6 +28,11 @@ const Router = () => {
                 <Route path="/DailyPlayers" element={<DailyPlayers />} />
                 <Route path="/Profile" element={<ProfilePage />} />
                 <Route path="/PlayerBuilder" element={<PlayerBuilder />} />
+                <Route path="/startcat" element={<StartCatTimer />} />
+                <Route path="/stopcat" element={<StopCatTimer />} />
+                <Route path="/startdog" element={<StartDogTimer />} />
+                <Route path="/stopdog" element={<StopDogTimer />} />
+                <Route path="/tvdisplay" element={<TvDisplay />} />
                 <Route path="/Reps" element={<Reps />} />
                 <Route path="*" element={<Dashboard to="/" replace />} />
             </>

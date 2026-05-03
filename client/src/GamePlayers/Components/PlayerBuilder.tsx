@@ -3,8 +3,6 @@ import Button from '../../UI/Button/Button';
 import Card from '../../UI/Card/Card';
 import classes from '../Styles/PlayerBuilder.module.scss';
 import PlayerPuzzleForm from '../../UI/Form/PlayerPuzzleForm';
-import InProgressPlayers from './InProgressPlayers';
-import DailyPlayers from './DailyPlayers';
 import EditPuzzleForm from '../../UI/Form/EditPuzzleForm';
 import axios from 'axios';
 import {type Player} from './PlayerInterface';
@@ -15,9 +13,7 @@ const PlayerBuilder: React.FC = () => {
   const [dogPlayers, setDogPlayers] = useState<Player[]>([]);
   const [showPuzzleForm, setShowPuzzleForm] = useState<boolean>(false);
   const [showEditPuzzleForm, setShowEditPuzzleForm] = useState<boolean>(false);
-  const [update, setUpdate] = useState<boolean>(false);
-  const [isDogPlayInProgress, setIsDogPlayInProgress] = useState<boolean>(false);
-  const [isCatPlayInProgress, setIsCatPlayInProgress] = useState<boolean>(false);
+  const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
 
   useEffect(() => {
     console.log('All players:', allPlayers);
@@ -34,7 +30,7 @@ const PlayerBuilder: React.FC = () => {
         tableName: "game_players_table"
       };
       try {
-        const response = await axios.get<Player[]>('http://localhost:5001/getAll/', { params: dbObject });
+        const response = await axios.get<Player[]>('http://192.168.4.188:5001/getAll/', { params: dbObject });
         setAllPlayers(response.data);
       } catch (error) {
         console.error('Error fetching users:', error);
@@ -49,17 +45,13 @@ const PlayerBuilder: React.FC = () => {
   };
 
   const editPlayerHandler = (player: Player) => {
-    <EditPuzzleForm
-      player={player}
-      puzzleState={allPlayers}
-      updateCurrentPlayer={(updatedPuzzleState) => setAllPlayers(updatedPuzzleState as Player[])}
-      setShowEditPuzzleForm={setShowEditPuzzleForm}
-    />;
+    setSelectedPlayer(player);
+    setShowEditPuzzleForm(true);
   };
 
   const deletePlayerHandler = async (playerId: string) => {
     try {
-      const response = await axios.delete(`http://localhost:5001/deletePlayer/${playerId}`);
+      const response = await axios.delete(`http://192.168.4.188:5001/deletePlayer/${playerId}`);
       console.log('Player deleted:', response.data);
       if (response.data.message === 'Deleted') {
         setAllPlayers(prevPlayers => prevPlayers.filter(player => player.player_guid !== playerId));
@@ -67,18 +59,14 @@ const PlayerBuilder: React.FC = () => {
     } catch (error) {
       console.error('Error deleting player:', error);
     }
-
-    setTimeout(() => {
-      setUpdate(prev => !prev); // Trigger update to refresh the UI after delay
-    }, 2000);
   };
 
   const searchPlayersHandler = (searchTerm: string) => {
-    const lowerCaseSearchTerm = searchTerm.toLowerCase();
+    const lowerCaseSearchTerm = searchTerm.toLowerCase().trim();
     const highlightPlayers = (players: Player[]) => {
       return players.map(player => ({
         ...player,
-        highlight: player.username.toLowerCase().includes(lowerCaseSearchTerm),
+        highlight: lowerCaseSearchTerm !== "" && player.username.toLowerCase().includes(lowerCaseSearchTerm),
       }));
     };
 
@@ -87,12 +75,23 @@ const PlayerBuilder: React.FC = () => {
   };
 
   return (
-    <div className="playerBoard">
+    <div className={classes.playerBoard}>
       {showPuzzleForm && (
         <div className={classes.puzzleForm}>
           <PlayerPuzzleForm
             setShowPuzzleForm={setShowPuzzleForm}
             setAllPlayers={setAllPlayers}
+          />
+        </div>
+      )}
+
+      {showEditPuzzleForm && selectedPlayer && (
+        <div className={classes.puzzleForm}>
+          <EditPuzzleForm
+            player={selectedPlayer}
+            puzzleState={allPlayers}
+            updateCurrentPlayer={(updatedPuzzleState) => setAllPlayers(updatedPuzzleState as Player[])}
+            setShowEditPuzzleForm={setShowEditPuzzleForm}
           />
         </div>
       )}
@@ -116,16 +115,6 @@ const PlayerBuilder: React.FC = () => {
               </span>
             </Card>
           </div>
-          <div className={classes.budgetHeader}>
-            <Card>
-              <InProgressPlayers
-                currentPlayer={catPlayers[0]}
-                updateCurrentPlayer={setCatPlayers}
-                puzzleState={catPlayers}
-                setHighlightCurrentPlayer={setIsCatPlayInProgress}
-              />
-            </Card>
-          </div>
         </div>
 
         <div className={`${classes.budgetBox} ${classes.centerButton}`}>
@@ -136,20 +125,10 @@ const PlayerBuilder: React.FC = () => {
               </span>
             </Card>
           </div>
-          <div className={classes.budgetHeader}>
-            <Card>
-              <InProgressPlayers
-                currentPlayer={dogPlayers[0]}
-                updateCurrentPlayer={setDogPlayers}
-                puzzleState={dogPlayers}
-                setHighlightCurrentPlayer={setIsDogPlayInProgress}
-              />
-            </Card>
-          </div>
         </div>
       </div>
       <div className={classes.budgetBuilder}>
-        <div className={classes.budgetBox}>
+        <div className={`${classes.budgetBox} ${classes.staticTableContainer}`}>
           <table className={`${classes.playerTable} ${classes.borderedTable}`}>
             <thead>
               <tr>
@@ -162,15 +141,7 @@ const PlayerBuilder: React.FC = () => {
               {catPlayers.map((player, index) => (
                 <tr
                   key={player.player_guid}
-                  className={
-                    index === 0 && isCatPlayInProgress
-                      ? classes.inProgressPlayer
-                      : index === 0 && !isCatPlayInProgress
-                      ? classes.nextPlayer
-                      : index === 1 && isCatPlayInProgress
-                      ? classes.nextPlayer
-                      : ""
-                  }
+                  className={index === 0 ? classes.nextPlayer : ""}
                 >
                   <td>{index + 1}</td>
                   <td className={player.highlight ? classes.highlight : ""}>
@@ -196,7 +167,7 @@ const PlayerBuilder: React.FC = () => {
           </table>
         </div>
 
-        <div className={classes.budgetBox}>
+        <div className={`${classes.budgetBox} ${classes.staticTableContainer}`}>
           <table className={`${classes.playerTable} ${classes.borderedTable}`}>
             <thead>
               <tr>
@@ -209,15 +180,7 @@ const PlayerBuilder: React.FC = () => {
               {dogPlayers.map((player, index) => (
                 <tr
                   key={player.player_guid}
-                  className={
-                    index === 0 && isDogPlayInProgress
-                      ? classes.inProgressPlayer
-                      : index === 0 && !isDogPlayInProgress
-                      ? classes.nextPlayer
-                      : index === 1 && isDogPlayInProgress
-                      ? classes.nextPlayer
-                      : ""
-                  }
+                  className={index === 0 ? classes.nextPlayer : ""}
                 >
                   <td>{index + 1}</td>
                   <td className={player.highlight ? classes.highlight : ""}>
@@ -243,7 +206,6 @@ const PlayerBuilder: React.FC = () => {
           </table>
         </div>
       </div>
-      <DailyPlayers />
     </div>
   );
 };

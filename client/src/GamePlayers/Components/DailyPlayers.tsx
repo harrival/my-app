@@ -3,15 +3,9 @@ import axios from 'axios';
 import Draggable from 'react-draggable';
 import { ResizableBox } from 'react-resizable';
 import 'react-resizable/css/styles.css';
+import { type Player } from './PlayerInterface';
 
 import classes from '../Styles/PlayerBuilder.module.scss';
-
-interface Player {
-    player_guid: string;
-    username: string;
-    puzzle_type: string;
-    time_used: string;
-}
 
 const DailyPlayers = () => {
     const [playedPlayers, setPlayedPlayers] = useState<Player[]>([]);
@@ -19,7 +13,7 @@ const DailyPlayers = () => {
     useEffect(() => {
         const fetchUsers = async () => {
             try {
-                const response = await axios.get<Player[]>('http://localhost:5001/completedPlayers');
+                const response = await axios.get<Player[]>('http://192.168.4.188:5001/completedPlayers');
                 console.log(response.data);
                 setPlayedPlayers(response.data);
             } catch (error) {

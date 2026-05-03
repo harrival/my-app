@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios';
 import { type Player } from './PlayerInterface';
 
 interface InProgressPlayersProps {
@@ -30,6 +29,17 @@ const InProgressPlayers: React.FC<InProgressPlayersProps> = ({
     };
   }, [isRunning]);
 
+  useEffect(() => {
+    if (currentPlayer?.game_status === 'InProgress') {
+      setIsRunning(true);
+      setHighlightCurrentPlayer(true);
+    } else {
+      setIsRunning(false);
+      setHighlightCurrentPlayer(false);
+      setPlayTime(0);
+    }
+  }, [currentPlayer?.player_guid, currentPlayer?.game_status, setHighlightCurrentPlayer]);
+
   const formatTime = (totalSeconds: number): string => {
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -52,44 +62,20 @@ const InProgressPlayers: React.FC<InProgressPlayersProps> = ({
     // ToDo: Update the player status in PlayersTable in Database
   };
 
-  const handleStop = async () => {
+  const handleStop = () => {
     setIsRunning(false);
     setHighlightCurrentPlayer(false);
     setPlayTime(0); // Reset playTime after stopping
-    const playedPlayer = {
-      time_used: formatTime(playTime),
-      timemodified: new Date().toISOString(),
-      game_status: 'Completed'
-    };
 
-    // ToDo: Update the player status in PlayersTable in Database
-    try {
-      const response = await axios.patch(
-        `http://localhost:5001/editPlayer/${currentPlayer?.player_guid}`,
-        playedPlayer
-      );
-      console.log('Player updated:', response.data);
-
-      if (response.status === 200) {
-        const updatedPuzzleState = puzzleState.filter(
-          (player) => player.player_guid !== currentPlayer?.player_guid
-        );
-        updateCurrentPlayer(updatedPuzzleState);
-      }
-    } catch (error) {
-      console.error('Error updating player playTime:', error);
-    }
+    const updatedPuzzleState = puzzleState.filter(
+      (player) => player.player_guid !== currentPlayer?.player_guid
+    );
+    updateCurrentPlayer(updatedPuzzleState);
   };
 
   return (
     <div>
-      <h3>Timer: {formatTime(playTime)}</h3>
-      <button onClick={handleStart} disabled={isRunning}>
-        Start
-      </button>
-      <button onClick={handleStop} disabled={!isRunning}>
-        Stop
-      </button>
+      <h3 style={{ margin: 0 }}>Timer: {formatTime(playTime)}</h3>
     </div>
   );
 };

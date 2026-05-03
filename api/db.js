@@ -1,6 +1,6 @@
 /** Database setup for users. */
 
-const { Client } = require("pg");
+const { Pool } = require("pg");
 
 let DB_URI;
 
@@ -10,10 +10,14 @@ if (process.env.NODE_ENV === "test") {
   DB_URI = "postgresql:///triplegreatedb";
 }
 
-let db = new Client({
+const db = new Pool({
   connectionString: DB_URI
 });
 
-db.connect();
+// Test connection and handle errors
+db.on('error', (err) => {
+  console.error('Unexpected error on idle client', err);
+  process.exit(-1);
+});
 
 module.exports = db;

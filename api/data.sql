@@ -93,3 +93,18 @@ INSERT INTO reps_table (rep_guid, rep, event_id, is_active) VALUES
 INSERT INTO game_players_table (username, email, puzzle_type, rep_id, event_id, player_guid) VALUES
 ('harri', 'harri@gmail.com', 'CAT', 'GUID10001', 'GUID2000', 'GUID100001'),
 ('val', 'val@gmail.com', 'DOG', 'GUID10001', 'GUID2000', 'GUID100002');
+
+-- 1. Create the notification function
+CREATE OR REPLACE FUNCTION notify_game_players_changes() RETURNS trigger AS $$
+BEGIN
+  -- This sends the signal 'game_players_changes'
+  PERFORM pg_notify('game_players_changes', '');
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 2. Attach it to the table for all modifications
+DROP TRIGGER IF EXISTS game_players_changes_trigger ON game_players_table;
+CREATE TRIGGER game_players_changes_trigger
+AFTER INSERT OR UPDATE OR DELETE ON game_players_table
+FOR EACH ROW EXECUTE FUNCTION notify_game_players_changes();

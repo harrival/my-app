@@ -8,16 +8,13 @@ interface Player {
     phone_number?: string;
     username?: string;
     puzzle_type?: string;
-}
-
-interface PuzzleState {
-    player_guid: string;
+    [key: string]: any;
 }
 
 interface EditPuzzleFormProps {
     player: Player;
-    puzzleState: PuzzleState[];
-    updateCurrentPlayer: (updatedPuzzleState: PuzzleState[]) => void;
+    puzzleState: Player[];
+    updateCurrentPlayer: (updatedPuzzleState: Player[]) => void;
     setShowEditPuzzleForm: (show: boolean) => void;
 }
 
@@ -110,14 +107,14 @@ const EditPuzzleForm = ({
             };
             try {
                 const response = await axios.patch(
-                    `http://localhost:5001/editPlayerForm/${player.player_guid}`,
+                    `http://192.168.4.188:5001/editPlayerForm/${player.player_guid}`,
                     editedPlayer
                 );
                 console.log('Player updated:', response.data);
 
                 if (response.status === 200) {
-                    const updatedPuzzleState = puzzleState.filter(
-                        (p) => p.player_guid !== player.player_guid
+                    const updatedPuzzleState = puzzleState.map((p) =>
+                        p.player_guid === player.player_guid ? { ...p, ...editedPlayer } : p
                     );
                     updateCurrentPlayer(updatedPuzzleState);
                 }

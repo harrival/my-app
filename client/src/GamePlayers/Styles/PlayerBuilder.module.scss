@@ -31,10 +31,20 @@
     margin: 10px;
 }
 
+.playerBoard {
+    position: relative;
+}
+
 .puzzleForm {
-    display: flex;
-    justify-content: center;
-    align-items: center;
+    position: absolute;
+    top: 20%;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1000;
+    background-color: white;
+    border: 1px solid #ccc;
+    padding: 20px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .puzzleForm input {
@@ -77,4 +87,41 @@
 }
 .nextPlayer {
     background-color: rgb(203, 238, 149);
+}
+
+.tvLayout {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100%;
+    background-color: #fff;
+}
+
+.tvTopHalf {
+    display: flex;
+    flex: 1;
+    height: 50%;
+    border-bottom: 2px solid #333;
+}
+
+.tvBottomHalf {
+    flex: 1;
+    height: 50%;
+    overflow-y: auto;
+}
+
+.tvQuadrant {
+    flex: 1;
+    border-right: 1px solid #ccc;
+    overflow-y: auto;
+    padding: 10px;
+
+    &:last-child {
+        border-right: none;
+    }
+}
+
+.staticTableContainer {
+    height: 65vh;
+    overflow-y: auto;
 }
