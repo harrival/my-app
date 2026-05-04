@@ -1,17 +1,95 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+// @ts-ignore
+import dogBackground from '../../assets/dog.jpeg';
+import { type Player } from './PlayerInterface'; // Import Player interface
+import axios from 'axios';
+import { useRefresh } from '../../shared/Context/RefreshContext';
 
-const StopDogTimer: React.FC = () => {
+interface StopDogTimerProps {
+  player?: Player; // Make player prop optional
+}
+
+const StopDogTimer: React.FC<StopDogTimerProps> = ({ player }) => {
   const navigate = useNavigate();
+  const { refreshKey } = useRefresh();
+  const [startNavigationTimer, setStartNavigationTimer] = useState(false);
 
-//   useEffect(() => {
-//     const timeout = setTimeout(() => {
-//       navigate('/tvdisplay');
-//     }, 3000);
-//     return () => clearTimeout(timeout);
-//   }, [navigate]);
+  const [allPlayers, setAllPlayers] = useState<Player[]>([]);
+  const [dogPlayer, setDogPlayer] = useState<Player[]>([]);
 
-  return <div>Stopping Dog Timer...</div>;
+  useEffect(() => {
+    const fetchUsers = async () => {
+      const dbObject = {
+        tableName: "game_players_table"
+      };
+      try {
+        console.log('request from timer');
+        const response = await axios.get<Player[]>('http://192.168.4.188:5001/getAll/', { params: dbObject });
+        setAllPlayers(response.data);
+      } catch (error) {
+        console.error('Error fetching users:', error);
+      }
+    };
+
+    fetchUsers();
+  }, [refreshKey]); // Triggers re-fetch when global refreshKey changes
+
+   useEffect(() => {
+      const dogs = allPlayers.filter(player => player.puzzle_type === 'DOG' && player.game_status !== 'completed');
+      console.log(dogs[0]);
+      setDogPlayer(dogs);
+    }, [allPlayers]);
+
+  const stopDogTimer = () => {
+    console.log(dogPlayer[0]);
+    setStartNavigationTimer(true);
+  };
+
+  useEffect(() => {
+    if (startNavigationTimer) {
+      const timeout = setTimeout(() => {
+        navigate('/tvdisplay');
+      }, 3000);
+      return () => clearTimeout(timeout);
+    }
+  }, [navigate, startNavigationTimer]);
+
+  return (
+    <div style={{
+      backgroundImage: `url(${dogBackground})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat', // Ensure the image doesn't repeat
+      width: '100%',
+      height: '100vh',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+    }}>
+      <button
+        onClick={() => stopDogTimer()}
+        style={{
+          width: '200px',
+          height: '200px',
+          borderRadius: '50%',
+          backgroundColor: 'rgba(255, 0, 0, 0.7)', // Red with some transparency
+          color: 'white',
+          fontSize: '2rem',
+          fontWeight: 'bold',
+          border: 'none',
+          cursor: 'pointer',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          boxShadow: '0px 0px 15px rgba(0, 0, 0, 0.5)', // Add some shadow for depth
+          touchAction: 'manipulation', // Optimize for touch screens
+        }}
+        >
+        Stop
+      </button>
+    </div>
+  );
 };
 
 export default StopDogTimer;

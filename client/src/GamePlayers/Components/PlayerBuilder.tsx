@@ -5,9 +5,11 @@ import classes from '../Styles/PlayerBuilder.module.scss';
 import PlayerPuzzleForm from '../../UI/Form/PlayerPuzzleForm';
 import EditPuzzleForm from '../../UI/Form/EditPuzzleForm';
 import axios from 'axios';
+import { useRefresh } from '../../shared/Context/RefreshContext';
 import {type Player} from './PlayerInterface';
 
 const PlayerBuilder: React.FC = () => {
+  const { refreshKey } = useRefresh();
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [catPlayers, setCatPlayers] = useState<Player[]>([]);
   const [dogPlayers, setDogPlayers] = useState<Player[]>([]);
@@ -30,6 +32,7 @@ const PlayerBuilder: React.FC = () => {
         tableName: "game_players_table"
       };
       try {
+        console.log('request from timer')
         const response = await axios.get<Player[]>('http://192.168.4.188:5001/getAll/', { params: dbObject });
         setAllPlayers(response.data);
       } catch (error) {
@@ -38,7 +41,7 @@ const PlayerBuilder: React.FC = () => {
     };
 
     fetchUsers();
-  }, []);
+  }, [refreshKey]); // Now updates automatically when any view changes the DB
 
   const showPuzzleFormHandler = () => {
     setShowPuzzleForm(!showPuzzleForm);
