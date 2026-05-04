@@ -1,5 +1,5 @@
 DROP TABLE IF EXISTS users;
-DROP TABLE IF EXISTS GamePlayers;
+DROP TABLE IF EXISTS game_players_table;
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
@@ -62,7 +62,10 @@ CREATE TABLE IF NOT EXISTS game_players_table (
     phone_number VARCHAR(15),
     puzzle_type VARCHAR(20),
     game_status VARCHAR(20) DEFAULT 'Created',
+    time_started TIME,
+    time_ended TIME,
     time_used TIME,
+    player_que_number INTEGER,
     time_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     time_modified TIMESTAMP,
     rep_id VARCHAR(50),
@@ -70,6 +73,11 @@ CREATE TABLE IF NOT EXISTS game_players_table (
     played_date DATE,
     FOREIGN KEY (rep_id) REFERENCES reps_table(rep_guid),
     FOREIGN KEY (event_id) REFERENCES events_table(event_guid)
+);
+
+CREATE TABLE IF NOT EXISTS que_nummber_table (
+    id SERIAL,
+    last_number INTEGER,
 );
 
 INSERT INTO customers_table (customer_guid, first_name, last_name, email, phone_number, address, permission_group, is_admin) VALUES

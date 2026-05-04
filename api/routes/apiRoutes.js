@@ -26,7 +26,7 @@ router.get("/reps", async function (req, res, next) {
 router.get("/getAll", async function (req, res, next) {
   const { tableName } = req.query;
   try {
-    const results = await db.query(`SELECT * FROM ${tableName}`);
+    const results = await db.query(`SELECT * FROM ${tableName} ORDER By time_created ASC`);
     return res.json(results.rows);
   } catch (err) {
     return next(err);
