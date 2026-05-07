@@ -88,7 +88,7 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers }: PuzzleFormProps)
 
     setErrors({
       contact: contactError,
-      username: usernameError,
+      username: usernameError, 
       puzzlePet: puzzlePetError,
     });
 
@@ -102,7 +102,11 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers }: PuzzleFormProps)
         email: formState.contact.includes('@') ? formState.contact : '',
         phone_number: formState.contact.match(/^\d{10}$/) ? formState.contact : '',
         puzzle_type: formState.puzzlePet as "CAT" | "DOG",
-        time_used,
+        time_started: '00:00:00',
+        time_ended: '00:00:00',
+        time_used: '00:00:00',
+        played_date: null,
+        player_que_number: null,
         time_created: new Date().toISOString(),
         time_modified,
         rep_id: representativeID,

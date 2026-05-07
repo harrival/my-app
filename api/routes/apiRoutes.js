@@ -40,7 +40,7 @@ router.get("/completedPlayers", async function (req, res, next) {
       `SELECT player_guid, username, time_used, puzzle_type 
        FROM game_players_table 
        WHERE game_status = $1 AND DATE(time_created) = CURRENT_DATE 
-       ORDER BY time_used ASC 
+       ORDER BY time_modified ASC, 
        LIMIT $2`, ['Completed', 20]);
 
     if (!results.rows || results.rows.length === 0) {
@@ -169,13 +169,14 @@ router.patch("/editPlayer/:id", async function (req, res, next) {
 });
 router.patch("/editPlayerForm/:id", async function (req, res, next) {
   try {
-    const { username, email,  phone_number, puzzle_type} = req.body;
+    const { username, email,  phone_number, puzzle_type, time_started, time_ended, time_used, time_modified, game_status, played_date} = req.body;
 
     const result = await db.query(
-          `UPDATE game_players_table SET username=$1, email=$2, phone_number=$3, puzzle_type=$4
-           WHERE player_guid = $5
+          `UPDATE game_players_table SET username=$1, email=$2, phone_number=$3, puzzle_type=$4,
+          time_started=$5, time_ended=$6, time_used=$7, time_modified=$8, game_status=$9, played_date=$10
+           WHERE player_guid = $11
            RETURNING id`,
-        [username, email,  phone_number, puzzle_type, req.params.id]
+        [username, email,  phone_number, puzzle_type, time_started, time_ended, time_used, time_modified, game_status, played_date, req.params.id]
     );
 
     return res.json(result.rows[0]);

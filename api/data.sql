@@ -61,12 +61,12 @@ CREATE TABLE IF NOT EXISTS game_players_table (
     email VARCHAR(100),
     phone_number VARCHAR(15),
     puzzle_type VARCHAR(20),
-    game_status VARCHAR(20) DEFAULT 'Created',
+    game_status VARCHAR(20),
     time_started TIME,
     time_ended TIME,
     time_used TIME,
     player_que_number INTEGER,
-    time_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    time_created TIMESTAMP,
     time_modified TIMESTAMP,
     rep_id VARCHAR(50),
     event_id VARCHAR(50),
@@ -77,7 +77,7 @@ CREATE TABLE IF NOT EXISTS game_players_table (
 
 CREATE TABLE IF NOT EXISTS que_nummber_table (
     id SERIAL,
-    last_number INTEGER,
+    last_number INTEGER
 );
 
 INSERT INTO customers_table (customer_guid, first_name, last_name, email, phone_number, address, permission_group, is_admin) VALUES
@@ -97,10 +97,6 @@ INSERT INTO puzzles_type (puzzle_type_guid, puzzle_name, is_archived, puzzle_typ
 
 INSERT INTO reps_table (rep_guid, rep, event_id, is_active) VALUES
 ('GUID10001', 'GUID1001', 'GUID2000', true);
-
-INSERT INTO game_players_table (username, email, puzzle_type, rep_id, event_id, player_guid) VALUES
-('harri', 'harri@gmail.com', 'CAT', 'GUID10001', 'GUID2000', 'GUID100001'),
-('val', 'val@gmail.com', 'DOG', 'GUID10001', 'GUID2000', 'GUID100002');
 
 -- 1. Create the notification function
 CREATE OR REPLACE FUNCTION notify_game_players_changes() RETURNS trigger AS $$

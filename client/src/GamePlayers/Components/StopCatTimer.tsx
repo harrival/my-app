@@ -40,8 +40,55 @@ const StopCatTimer: React.FC<StopCatTimerProps> = ({ player }) => {
       setCatPlayer(cats);
     }, [allPlayers]);
 
-  const stopCatTimer = () => {
-    console.log(catPlayer[0]);
+  const isGameInProgress = catPlayer[0]?.game_status === 'In_progress';
+
+    const timeFormat = (ms: number) => {
+  if (isNaN(ms) || ms < 0) return "00:00:00";
+
+  const hrs = Math.floor(ms / 3600000);
+  const mins = Math.floor((ms % 3600000) / 60000);
+  const secs = Math.floor((ms % 60000) / 1000);
+
+  return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const stopCatTimer = async () => {
+    const nowPlaying = catPlayer[0];
+    if (!isGameInProgress || !nowPlaying) return; // Disable if no game in progress or no player
+    console.log(nowPlaying);
+    const timeEnded = new Date().toLocaleTimeString('it-IT');
+
+    function timeToSeconds(timeStr: string) {
+      const [hrs, mins, secs] = timeStr.split(':').map(Number);
+      return (hrs * 3600) + (mins * 60) + secs;
+    }
+
+    const timeUsedSeconds = timeToSeconds(timeEnded) - timeToSeconds(nowPlaying.time_started);
+    const timeUsed = timeUsedSeconds * 1000;
+
+    const editedPlayer = {
+            game_status: 'Completed',
+            username: nowPlaying.username,
+            email: nowPlaying.email,
+            phone_number: nowPlaying.phone_number,
+            puzzle_type: nowPlaying.puzzle_type,
+            time_started: nowPlaying.time_started,
+            time_ended: timeEnded,
+            time_used: timeFormat(timeUsed),
+            played_date: new Date().toISOString(),
+            time_modified: new Date().toISOString(),
+            rep_id: nowPlaying.rep_id,
+            event_id: nowPlaying.event_id,
+          };
+    try {
+      const response = await axios.patch(
+        `http://192.168.4.188:5001/editPlayerForm/${nowPlaying.player_guid}`,
+        editedPlayer
+      );
+      console.log('Player updated:', response.data);
+    } catch (error) {
+      console.error('Error updating player playTime:', error);
+    }
   };
 
   return (
@@ -57,17 +104,18 @@ const StopCatTimer: React.FC<StopCatTimerProps> = ({ player }) => {
       alignItems: 'center',
     }}>
       <button
+        disabled={!isGameInProgress || catPlayer.length === 0}
         onClick={() => stopCatTimer()}
         style={{
           width: '200px',
           height: '200px',
           borderRadius: '50%',
-          backgroundColor: 'rgba(255, 0, 0, 0.7)', // Red with some transparency
+          backgroundColor: !isGameInProgress || catPlayer.length === 0 ? 'rgba(128, 128, 128, 0.7)' : 'rgba(255, 0, 0, 0.7)',
           color: 'white',
           fontSize: '2rem',
           fontWeight: 'bold',
           border: 'none',
-          cursor: 'pointer',
+          cursor: !isGameInProgress || catPlayer.length === 0 ? 'not-allowed' : 'pointer',
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
@@ -75,7 +123,7 @@ const StopCatTimer: React.FC<StopCatTimerProps> = ({ player }) => {
           touchAction: 'manipulation', // Optimize for touch screens
         }}
       >
-        Stop
+        {isGameInProgress ? 'Stop' : 'Not Started'}
       </button>
     </div>
   );

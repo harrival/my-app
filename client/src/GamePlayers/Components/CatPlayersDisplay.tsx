@@ -16,11 +16,11 @@ const CatPlayersDisplay: React.FC = () => {
       });
       // Filter for both Created and InProgress so players don't disappear while playing
       const cats = response.data
-        .filter(p => p.puzzle_type === 'CAT' && (p.game_status === 'Created' || p.game_status === 'InProgress'))
+        .filter(p => p.puzzle_type === 'CAT' && (p.game_status === 'Created' || p.game_status === 'In_progress'))
         // Ensure InProgress players are at the top of the list
         .sort((a, b) => {
-            if (a.game_status === 'InProgress') return -1;
-            if (b.game_status === 'InProgress') return 1;
+            if (a.game_status === 'In_progress') return -1;
+            if (b.game_status === 'In_progress') return 1;
             return 0;
         });
       setPlayers(cats);

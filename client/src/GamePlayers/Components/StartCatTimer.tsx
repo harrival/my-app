@@ -34,14 +34,41 @@ const StartCatTimer: React.FC<StartCatTimerProps> = ({ player }) => {
     fetchUsers();
   }, [refreshKey]); // Triggers re-fetch when global refreshKey changes
 
+  const isStarted = catPlayer[0]?.game_status === 'In_progress';
+
    useEffect(() => {
-      const cats = allPlayers.filter(player => player.puzzle_type === 'CAT' && player.game_status !== 'completed');
+      const cats = allPlayers.filter(player => player.puzzle_type === 'CAT' && player.game_status !== 'Completed');
       console.log(cats[0])
       setCatPlayer(cats);
     }, [allPlayers]);
 
-  const startCatTimer = () => {
-    console.log(catPlayer[0])
+  const startCatTimer = async () => {
+    const nowPlaying = catPlayer[0];
+    if (!nowPlaying || isStarted) return;
+
+    console.log(nowPlaying);
+
+    const editedPlayer = {
+            game_status: 'In_progress',
+            username: nowPlaying.username,
+            email: nowPlaying.email,
+            phone_number: nowPlaying.phone_number,
+            puzzle_type: nowPlaying.puzzle_type,
+            time_started: new Date().toLocaleTimeString('it-IT'),
+            time_modified: new Date().toISOString(),
+            time_used: nowPlaying.time_used,
+            rep_id: nowPlaying.rep_id,
+            event_id: nowPlaying.event_id,
+          };
+    try {
+      const response = await axios.patch(
+        `http://192.168.4.188:5001/editPlayerForm/${catPlayer[0].player_guid}`,
+        editedPlayer
+      );
+      console.log('Player updated:', response.data);
+    } catch (error) {
+      console.error('Error updating player playTime:', error);
+    }
   }
 
   return (
@@ -57,17 +84,18 @@ const StartCatTimer: React.FC<StartCatTimerProps> = ({ player }) => {
       alignItems: 'center',
     }}>
       <button
+        disabled={isStarted || catPlayer.length === 0}
         onClick={() => startCatTimer()}
         style={{
           width: '200px',
           height: '200px',
           borderRadius: '50%',
-          backgroundColor: 'rgba(0, 128, 0, 0.7)', // Green with some transparency
+          backgroundColor: isStarted || catPlayer.length === 0 ? 'rgba(128, 128, 128, 0.7)' : 'rgba(0, 128, 0, 0.7)',
           color: 'white',
           fontSize: '2rem',
           fontWeight: 'bold',
           border: 'none',
-          cursor: 'pointer',
+          cursor: isStarted || catPlayer.length === 0 ? 'not-allowed' : 'pointer',
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
@@ -75,7 +103,7 @@ const StartCatTimer: React.FC<StartCatTimerProps> = ({ player }) => {
           touchAction: 'manipulation', // Optimize for touch screens
         }}
       >
-        Start
+        {isStarted ? 'In Progress' : 'Start'}
       </button>
     </div>
   );

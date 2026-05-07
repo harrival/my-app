@@ -19,8 +19,8 @@ const PlayerBuilder: React.FC = () => {
 
   useEffect(() => {
     console.log('All players:', allPlayers);
-    const cats = allPlayers.filter(player => player.puzzle_type === 'CAT' && player.game_status === 'Created');
-    const dogs = allPlayers.filter(player => player.puzzle_type === 'DOG' && player.game_status === 'Created');
+    const cats = allPlayers.filter(player => player.puzzle_type === 'CAT' && player.game_status !== 'Completed');
+    const dogs = allPlayers.filter(player => player.puzzle_type === 'DOG' && player.game_status !== 'Completed');
 
     setCatPlayers(cats);
     setDogPlayers(dogs);

@@ -30,7 +30,7 @@ const InProgressPlayers: React.FC<InProgressPlayersProps> = ({
   }, [isRunning]);
 
   useEffect(() => {
-    if (currentPlayer?.game_status === 'InProgress') {
+    if (currentPlayer?.game_status === 'In_progress') {
       setIsRunning(true);
       setHighlightCurrentPlayer(true);
     } else {
@@ -55,7 +55,7 @@ const InProgressPlayers: React.FC<InProgressPlayersProps> = ({
     setHighlightCurrentPlayer(true);
     const updatedPuzzleState = puzzleState.map((player) =>
       player.id === currentPlayer?.id
-        ? { ...player, game_status: "InProgress" }
+        ? { ...player, game_status: "In_progress" }
         : player
     );
     updateCurrentPlayer(updatedPuzzleState);
