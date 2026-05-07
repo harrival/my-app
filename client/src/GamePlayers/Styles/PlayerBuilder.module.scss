@@ -125,3 +125,10 @@
     height: 65vh;
     overflow-y: auto;
 }
+
+.centeredContainer {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}

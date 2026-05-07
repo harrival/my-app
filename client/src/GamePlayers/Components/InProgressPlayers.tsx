@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { type Player } from './PlayerInterface';
 
 interface InProgressPlayersProps {
@@ -6,6 +6,7 @@ interface InProgressPlayersProps {
   updateCurrentPlayer: (updatedPuzzleState: Player[]) => void;
   puzzleState: Player[];
   setHighlightCurrentPlayer: (highlight: boolean) => void;
+  puzzleType: string;
 }
 
 const InProgressPlayers: React.FC<InProgressPlayersProps> = ({
@@ -13,9 +14,20 @@ const InProgressPlayers: React.FC<InProgressPlayersProps> = ({
   updateCurrentPlayer,
   puzzleState,
   setHighlightCurrentPlayer,
+  puzzleType,
 }) => {
   const [playTime, setPlayTime] = useState<number>(0);
   const [isRunning, setIsRunning] = useState<boolean>(false);
+
+  const calculateElapsedSeconds = useCallback((startTimeStr: string) => {
+    const [hrs, mins, secs] = startTimeStr.split(':').map(Number);
+    const now = new Date();
+    const start = new Date();
+    start.setHours(hrs, mins, secs, 0);
+    
+    const diff = Math.floor((now.getTime() - start.getTime()) / 1000);
+    return diff > 0 ? diff : 0;
+  }, []);
 
   useEffect(() => {
     let timer: number | undefined;
@@ -30,7 +42,8 @@ const InProgressPlayers: React.FC<InProgressPlayersProps> = ({
   }, [isRunning]);
 
   useEffect(() => {
-    if (currentPlayer?.game_status === 'In_progress') {
+    if (currentPlayer?.game_status === 'In_progress' && currentPlayer.time_started) {
+      setPlayTime(calculateElapsedSeconds(currentPlayer.time_started));
       setIsRunning(true);
       setHighlightCurrentPlayer(true);
     } else {
@@ -38,7 +51,7 @@ const InProgressPlayers: React.FC<InProgressPlayersProps> = ({
       setHighlightCurrentPlayer(false);
       setPlayTime(0);
     }
-  }, [currentPlayer?.player_guid, currentPlayer?.game_status, setHighlightCurrentPlayer]);
+  }, [currentPlayer?.player_guid, currentPlayer?.game_status, currentPlayer?.time_started, setHighlightCurrentPlayer, calculateElapsedSeconds]);
 
   const formatTime = (totalSeconds: number): string => {
     const hours = Math.floor(totalSeconds / 3600);
@@ -50,32 +63,9 @@ const InProgressPlayers: React.FC<InProgressPlayersProps> = ({
     )}:${String(seconds).padStart(2, "0")}`;
   };
 
-  const handleStart = () => {
-    setIsRunning(true);
-    setHighlightCurrentPlayer(true);
-    const updatedPuzzleState = puzzleState.map((player) =>
-      player.id === currentPlayer?.id
-        ? { ...player, game_status: "In_progress" }
-        : player
-    );
-    updateCurrentPlayer(updatedPuzzleState);
-    // ToDo: Update the player status in PlayersTable in Database
-  };
-
-  const handleStop = () => {
-    setIsRunning(false);
-    setHighlightCurrentPlayer(false);
-    setPlayTime(0); // Reset playTime after stopping
-
-    const updatedPuzzleState = puzzleState.filter(
-      (player) => player.player_guid !== currentPlayer?.player_guid
-    );
-    updateCurrentPlayer(updatedPuzzleState);
-  };
-
   return (
     <div>
-      <h3 style={{ margin: 0 }}>Timer: {formatTime(playTime)}</h3>
+      <h3 style={{ margin: 0 }}>{puzzleType} Timer: <span style={{color: 'red'}}>{formatTime(playTime)}</span></h3>
     </div>
   );
 };

@@ -5,6 +5,7 @@ import dogBackground from '../../assets/dog.jpeg';
 import { type Player } from './PlayerInterface'; // Import Player interface
 import axios from 'axios';
 import { useRefresh } from '../../shared/Context/RefreshContext';
+import { BASE_URL } from '../../shared/Utils/apiConfig';
 
 interface StartDogTimerProps {
   player?: Player; // Make player prop optional
@@ -24,7 +25,7 @@ const StartDogTimer: React.FC<StartDogTimerProps> = ({ player }) => {
       };
       try {
         console.log('request from timer')
-        const response = await axios.get<Player[]>('http://192.168.4.188:5001/getAll/', { params: dbObject });
+        const response = await axios.get<Player[]>(`${BASE_URL}/getAll/`, { params: dbObject });
         setAllPlayers(response.data);
       } catch (error) {
         console.error('Error fetching users:', error);
@@ -62,7 +63,7 @@ const StartDogTimer: React.FC<StartDogTimerProps> = ({ player }) => {
           };
     try {
       const response = await axios.patch(
-        `http://192.168.4.188:5001/editPlayerForm/${dogPlayer[0].player_guid}`,
+        `${BASE_URL}/editPlayerForm/${dogPlayer[0].player_guid}`,
         editedPlayer
       );
       console.log('Player updated:', response.data);

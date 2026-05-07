@@ -7,6 +7,7 @@ import EditPuzzleForm from '../../UI/Form/EditPuzzleForm';
 import axios from 'axios';
 import { useRefresh } from '../../shared/Context/RefreshContext';
 import {type Player} from './PlayerInterface';
+import { BASE_URL } from '../../shared/Utils/apiConfig';
 
 const PlayerBuilder: React.FC = () => {
   const { refreshKey } = useRefresh();
@@ -33,7 +34,7 @@ const PlayerBuilder: React.FC = () => {
       };
       try {
         console.log('request from timer')
-        const response = await axios.get<Player[]>('http://192.168.4.188:5001/getAll/', { params: dbObject });
+        const response = await axios.get<Player[]>(`${BASE_URL}/getAll/`, { params: dbObject });
         setAllPlayers(response.data);
       } catch (error) {
         console.error('Error fetching users:', error);
@@ -54,7 +55,7 @@ const PlayerBuilder: React.FC = () => {
 
   const deletePlayerHandler = async (playerId: string) => {
     try {
-      const response = await axios.delete(`http://192.168.4.188:5001/deletePlayer/${playerId}`);
+      const response = await axios.delete(`${BASE_URL}/deletePlayer/${playerId}`);
       console.log('Player deleted:', response.data);
       if (response.data.message === 'Deleted') {
         setAllPlayers(prevPlayers => prevPlayers.filter(player => player.player_guid !== playerId));

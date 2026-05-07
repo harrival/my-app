@@ -5,6 +5,7 @@ import dogBackground from '../../assets/dog.jpeg';
 import { type Player } from './PlayerInterface'; // Import Player interface
 import axios from 'axios';
 import { useRefresh } from '../../shared/Context/RefreshContext';
+import { BASE_URL } from '../../shared/Utils/apiConfig';
 
 interface StopCatTimerProps {
   player?: Player; // Make player prop optional
@@ -24,7 +25,7 @@ const StopCatTimer: React.FC<StopCatTimerProps> = ({ player }) => {
       };
       try {
         console.log('request from timer');
-        const response = await axios.get<Player[]>('http://192.168.4.188:5001/getAll/', { params: dbObject });
+        const response = await axios.get<Player[]>(`${BASE_URL}/getAll/`, { params: dbObject });
         setAllPlayers(response.data);
       } catch (error) {
         console.error('Error fetching users:', error);
@@ -35,7 +36,7 @@ const StopCatTimer: React.FC<StopCatTimerProps> = ({ player }) => {
   }, [refreshKey]); // Triggers re-fetch when global refreshKey changes
 
    useEffect(() => {
-      const cats = allPlayers.filter(player => player.puzzle_type === 'CAT' && player.game_status !== 'completed');
+      const cats = allPlayers.filter(player => player.puzzle_type === 'CAT' && player.game_status !== 'Completed');
       console.log(cats[0]);
       setCatPlayer(cats);
     }, [allPlayers]);
@@ -82,7 +83,7 @@ const StopCatTimer: React.FC<StopCatTimerProps> = ({ player }) => {
           };
     try {
       const response = await axios.patch(
-        `http://192.168.4.188:5001/editPlayerForm/${nowPlaying.player_guid}`,
+        `${BASE_URL}/editPlayerForm/${nowPlaying.player_guid}`,
         editedPlayer
       );
       console.log('Player updated:', response.data);

@@ -3,6 +3,7 @@ import axios from 'axios';
 import Card from '../../UI/Card/Card';
 import InProgressPlayers from './InProgressPlayers';
 import { type Player } from './PlayerInterface';
+import { BASE_URL } from '../../shared/Utils/apiConfig';
 import classes from '../Styles/PlayerBuilder.module.scss';
 
 const CatPlayersDisplay: React.FC = () => {
@@ -11,7 +12,7 @@ const CatPlayersDisplay: React.FC = () => {
 
   const fetchPlayers = useCallback(async () => {
     try {
-      const response = await axios.get<Player[]>('http://192.168.4.188:5001/getAll/', {
+      const response = await axios.get<Player[]>(`${BASE_URL}/getAll/`, {
         params: { tableName: "game_players_table" }
       });
       // Filter for both Created and InProgress so players don't disappear while playing
@@ -35,7 +36,7 @@ const CatPlayersDisplay: React.FC = () => {
 
   const deletePlayerHandler = async (playerId: string) => {
     try {
-      const response = await axios.delete(`http://192.168.4.188:5001/deletePlayer/${playerId}`);
+      const response = await axios.delete(`${BASE_URL}/deletePlayer/${playerId}`);
       if (response.data.message === 'Deleted') {
         setPlayers(prev => prev.filter(p => p.player_guid !== playerId));
       }
@@ -56,15 +57,15 @@ const CatPlayersDisplay: React.FC = () => {
             updateCurrentPlayer={setPlayers}
             puzzleState={players}
             setHighlightCurrentPlayer={setIsPlayInProgress}
+            puzzleType="CAT"
           />
         </Card>
       </div>
       <table className={`${classes.playerTable} ${classes.borderedTable}`}>
         <thead>
           <tr>
-            <th>No</th>
+            <th>Number</th>
             <th>Username</th>
-            <th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -79,16 +80,10 @@ const CatPlayersDisplay: React.FC = () => {
                   : ""
               }
             >
-              <td>{index + 1}</td>
-              <td>{player.username}</td>
               <td>
-                <span
-                  className={classes.deletePlayer}
-                  onClick={() => deletePlayerHandler(player.player_guid)}
-                >
-                  Delete
-                </span>
+                <span> {player.player_que_number}</span>
               </td>
+              <td>{player.username}</td>
             </tr>
           ))}
         </tbody>
