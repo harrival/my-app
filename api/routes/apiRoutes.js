@@ -24,7 +24,7 @@ router.get("/reps", async function (req, res, next) {
 
 /** Get items from a table with dynamic filters and limit */
 router.get("/getAll", async function (req, res, next) {
-  const { tableName, limit = 20, ...filters } = req.query;
+  const { tableName, limit = 20, orderBy, ...filters } = req.query;
   try {
     let query = `SELECT * FROM ${tableName}`;
     const queryParams = [];
@@ -42,11 +42,44 @@ router.get("/getAll", async function (req, res, next) {
       query += ` WHERE ${whereClauses.join(" AND ")}`;
     }
 
-    query += ` ORDER BY time_created ASC LIMIT $${queryParams.length + 1}`;
+    if (orderBy) {
+      query += ` ORDER BY ${orderBy} ASC`;
+    }
+
+    query += ` LIMIT $${queryParams.length + 1}`;
     queryParams.push(limit);
 
     const results = await db.query(query, queryParams);
     return res.json(results.rows);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/** Get a single item from a table with dynamic filters */
+router.get("/getOne", async function (req, res, next) {
+  const { tableName, ...filters } = req.query;
+  try {
+    if (!tableName) {
+      return res.status(400).json({ error: "tableName is required" });
+    }
+
+    let query = `SELECT * FROM ${tableName}`;
+    const queryParams = [];
+    const filterKeys = Object.keys(filters);
+
+    if (filterKeys.length > 0) {
+      const whereClauses = filterKeys.map((key, idx) => {
+        queryParams.push(filters[key]);
+        return `${key} = $${idx + 1}`;
+      });
+      query += ` WHERE ${whereClauses.join(" AND ")}`;
+    }
+
+    query += " LIMIT 1";
+
+    const results = await db.query(query, queryParams);
+    return res.json(results.rows[0] || null);
   } catch (err) {
     return next(err);
   }
@@ -61,7 +94,7 @@ router.get("/completedPlayers", async function (req, res, next) {
   const sortColumn = validSortColumns.includes(sortBy) ? sortBy : 'time_modified';
 
   // Security: Validate sort direction
-  const direction = sortDir.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+  const direction = (sortDir || '').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
   try {
     const results = await db.query(
@@ -134,7 +167,8 @@ router.get("/dbsearch", async function (req, res, next) {
     const fieldNames = Object.keys(fields).join(", ");
     const values = Object.values(fields);
     const placeholders = values.map((_, idx) => `$${idx + 1}`).join(", ");
-    const query = `SELECT ${fieldNames} FROM ${tableName} WHERE ${fieldNames}= ${placeholders}`;
+    const query = `SELECT ${fieldNames} FROM ${tableName} 
+    WHERE ${fieldNames}= ${placeholders} AND DATE(time_created) = CURRENT_DATE AND game_status = 'Created'`;
 
     const results = await db.query(query, values);
 
@@ -155,7 +189,6 @@ router.post("/addToTable", async function (req, res, next) {
     console.log(tableName);
 
     if (!tableName || !fields || typeof fields !== 'object') {
-      conseole.log("i ran")
       return res.status(400).json({ error: "Invalid input data" });
     }
 
@@ -178,14 +211,25 @@ router.post("/addToTable", async function (req, res, next) {
 
 router.patch("/editPlayer/:id", async function (req, res, next) {
   try {
-    const { game_status, time_used,  timemodified} = req.body;
+    const { id } = req.params;
+    const fields = req.body;
+    const queryParams = [];
+    let querySet = [];
 
-    const result = await db.query(
-          `UPDATE game_players_table SET game_status=$1, time_used=$2, timemodified=$3
-           WHERE player_guid = $4
-           RETURNING id`,
-        [game_status, time_used, timemodified, req.params.id]
-    );
+    for (const key in fields) {
+      if (Object.prototype.hasOwnProperty.call(fields, key)) {
+        queryParams.push(fields[key]);
+        querySet.push(`${key}=$${queryParams.length}`);
+      }
+    }
+
+    if (querySet.length === 0) {
+      return res.status(400).json({ error: "No fields to update" });
+    }
+
+    queryParams.push(id);
+    const query = `UPDATE game_players_table SET ${querySet.join(", ")} WHERE player_guid = $${queryParams.length} RETURNING id`;
+    const result = await db.query(query, queryParams);
 
     return res.json(result.rows[0]);
   }
@@ -194,17 +238,41 @@ router.patch("/editPlayer/:id", async function (req, res, next) {
     return next(err);
   }
 });
+
 router.patch("/editPlayerForm/:id", async function (req, res, next) {
   try {
-    const { username, email,  phone_number, puzzle_type, time_started, time_ended, time_used, time_modified, game_status, played_date} = req.body;
+    const { id } = req.params;
+    // Default to player table settings if not provided
+    const { 
+      tableName = "game_players_table", 
+      idColumn = "player_guid", 
+      ...fields 
+    } = req.body;
 
-    const result = await db.query(
-          `UPDATE game_players_table SET username=$1, email=$2, phone_number=$3, puzzle_type=$4,
-          time_started=$5, time_ended=$6, time_used=$7, time_modified=$8, game_status=$9, played_date=$10
-           WHERE player_guid = $11
-           RETURNING id`,
-        [username, email,  phone_number, puzzle_type, time_started, time_ended, time_used, time_modified, game_status, played_date, req.params.id]
-    );
+    const queryParams = [];
+    let querySet = [];
+    let paramIdx = 1;
+
+    for (const key in fields) {
+      if (fields.hasOwnProperty(key)) {
+        queryParams.push(fields[key]);
+        querySet.push(`${key}=$${paramIdx}`);
+        paramIdx++;
+      }
+    }
+
+    if (querySet.length === 0) {
+      return res.status(400).json({ error: "No fields to update" });
+    }
+
+    queryParams.push(id); // Add player_guid to the end of params
+
+    const query = `UPDATE ${tableName} SET ${querySet.join(", ")} WHERE ${idColumn} = $${paramIdx} RETURNING *`;
+    const result = await db.query(query, queryParams);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Item not found" });
+    }
 
     return res.json(result.rows[0]);
   }

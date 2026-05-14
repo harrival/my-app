@@ -30,7 +30,7 @@ const DailyPlayers = () => {
 
     return (
         <div className={classes.centeredContainer}>
-            <h1 className={classes.completedDaily}>Last three players</h1>
+            <h2 className={classes.completedDaily} style={{ textAlign: 'center' }}>Last three players</h2>
             <table
                 border={1}
                 className={`${classes.playerTable} ${classes.borderedTable}`}
@@ -43,8 +43,16 @@ const DailyPlayers = () => {
                     </tr>
                 </thead>
                 <tbody>
-                    {playedPlayers.map((player) => (
-                        <tr key={player.player_guid}>
+                    {playedPlayers.map((player, index) => (
+                        <tr
+                            key={player.player_guid}
+                            style={{
+                                backgroundColor:
+                                    index === 0 ? 'lightgreen' :
+                                    index === 1 ? 'lightyellow' :
+                                    index === 2 ? '#ffcccc' : undefined
+                            }}
+                        >
                             <td>{player.username}</td>
                             <td>{player.puzzle_type}</td>
                             <td>{player.time_used}</td>

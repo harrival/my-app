@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { BASE_URL } from '../../shared/Utils/apiConfig';
 import './PuzzleForm.css';
 import { type Player } from '../../GamePlayers/Components/PlayerInterface';
 
@@ -62,6 +63,22 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers }: PuzzleFormProps)
     return '';
   };
 
+  const validateUniqueUsername = async (username: string): Promise<string> => {
+    try {
+      const dbObject = {
+        tableName: "game_players_table",
+        fields: { username }
+      };
+      const response = await axios.get(`${BASE_URL}/dbsearch`, { params: dbObject });
+      if (response.data.length > 0) {
+        return 'Username already exists';
+      }
+    } catch (error) {
+      console.error('Error checking username uniqueness:', error);
+    }
+    return '';
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const { id, value } = e.target;
     setFormState((prevState) => ({ ...prevState, [id]: value }));
@@ -83,8 +100,12 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers }: PuzzleFormProps)
     e.preventDefault();
 
     const contactError = validateContact(formState.contact);
-    const usernameError = validateUsername(formState.username);
+    let usernameError = validateUsername(formState.username);
     const puzzlePetError = validatePuzzlePet(formState.puzzlePet);
+
+    if (!usernameError) {
+      usernameError = await validateUniqueUsername(formState.username);
+    }
 
     setErrors({
       contact: contactError,
@@ -93,6 +114,32 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers }: PuzzleFormProps)
     });
 
     if (!contactError && !usernameError && !puzzlePetError) {
+      let assignedQueNumber = 1;
+
+      try {
+        const queResponse = await axios.get(`${BASE_URL}/getOne`, {
+          params: { tableName: "que_number_table" }
+        });
+
+        if (queResponse.data) {
+          assignedQueNumber = Number(queResponse.data.last_number) + 1;
+          // Update existing record using the dynamic PATCH route
+          await axios.patch(`${BASE_URL}/editPlayerForm/${queResponse.data.id}`, {
+            tableName: "que_number_table",
+            idColumn: "id",
+            last_number: assignedQueNumber
+          });
+        } else {
+          assignedQueNumber = 1;
+          await axios.post(`${BASE_URL}/addToTable`, {
+            tableName: "que_number_table",
+            fields: { last_number: 1 } // If DB uses 'number', change 'last_number' to 'number'
+          });
+        }
+      } catch (error) {
+        console.error('Error handling queue number:', error);
+      }
+
       const uniqueId = 'PLAYERG' + Date.now().toString();
       const newPlayer: Player = {
         id: '',
@@ -106,7 +153,7 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers }: PuzzleFormProps)
         time_ended: '00:00:00',
         time_used: '00:00:00',
         played_date: null,
-        player_que_number: null,
+        player_que_number: assignedQueNumber,
         time_created: new Date().toISOString(),
         time_modified,
         rep_id: representativeID,
@@ -119,7 +166,7 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers }: PuzzleFormProps)
                 fields: newPlayerWithoutId
             }
 
-        const response = await axios.post('http://192.168.4.46:5001/addToTable', dbObject);
+        const response = await axios.post(`${BASE_URL}/addToTable`, dbObject);
         if (response.status === 201) {
           setAllPlayers((prev) => [...prev, { ...newPlayer, game_status: 'Created' }]);
           resetForm();

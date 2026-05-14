@@ -19,7 +19,7 @@ const TvDisplay: React.FC = () => {
           <DogPlayersDisplay key={`dog-${refreshKey}`} />
         </div>
       </div>
-      <div className={classes.tvTopHalf}>
+      <div className={classes.tvBottomHalf}>
         <div className={classes.tvQuadrant}>
           <DailyPlayers key={`daily-${refreshKey}`} />
         </div>

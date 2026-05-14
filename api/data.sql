@@ -1,5 +1,6 @@
 DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS game_players_table;
+DROP TABLE IF EXISTS que_number_table;
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     name TEXT NOT NULL,
@@ -76,7 +77,7 @@ CREATE TABLE IF NOT EXISTS game_players_table (
     FOREIGN KEY (event_id) REFERENCES events_table(event_guid)
 );
 
-CREATE TABLE IF NOT EXISTS que_nummber_table (
+CREATE TABLE IF NOT EXISTS que_number_table (
     id SERIAL,
     last_number INTEGER
 );

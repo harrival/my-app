@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { type Customer } from "../../user/pages/UserInterface";
 import axios from "axios";
+import { BASE_URL } from "../../shared/Utils/apiConfig";
 
 const CreateProfile = () => {
     // Removed unused customer state
@@ -62,7 +63,7 @@ const CreateProfile = () => {
         fields: {[dbSearch]: value}
     }
     try {
-      const response = await axios.get(`http://localhost:5001/dbsearch/`, { params: dbObject });
+      const response = await axios.get(`${BASE_URL}/dbsearch/`, { params: dbObject });
       if (response.data.length > 0) {
         returnValue = 'Contact already exists';
       }
@@ -73,7 +74,6 @@ const CreateProfile = () => {
   };
 
     const handleSubmit = async (e: React.FormEvent): Promise<void> => {
-        e.preventDefault();
         e.preventDefault();
 
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -120,7 +120,7 @@ const CreateProfile = () => {
             }
 
             try {
-                const response = await axios.post('http://localhost:5001/addToTable', dbObject);
+                const response = await axios.post(`${BASE_URL}/addToTable`, dbObject);
 
                 if (response.status === 201) {
                     setCustomerInfo({

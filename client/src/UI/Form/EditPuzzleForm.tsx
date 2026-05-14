@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import './PuzzleForm.css'; // Assuming you have some basic styles in this file
 import axios from 'axios';
+import { BASE_URL } from '../../shared/Utils/apiConfig';
 
 interface Player {
     player_guid: string;
@@ -69,6 +70,22 @@ const EditPuzzleForm = ({
         return '';
     };
 
+    const validateUniqueUsername = async (username: string): Promise<string> => {
+        try {
+            const dbObject = {
+                tableName: "game_players_table",
+                fields: { username }
+            };
+            const response = await axios.get(`${BASE_URL}/dbsearch`, { params: dbObject });
+            if (response.data.length > 0) {
+                return 'Username already exists';
+            }
+        } catch (error) {
+            console.error('Error checking username uniqueness:', error);
+        }
+        return '';
+    };
+
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
         const { id, value } = e.target;
         setFormState((prevState) => ({ ...prevState, [id]: value }));
@@ -89,8 +106,12 @@ const EditPuzzleForm = ({
     const handleEditPuzzleForm = async (e: React.FormEvent): Promise<void> => {
         e.preventDefault();
         const contactError = validateContact(formState.contact);
-        const usernameError = validateUsername(formState.username);
+        let usernameError = validateUsername(formState.username);
         const puzzlePetError = validatePuzzlePet(formState.puzzlePet);
+
+        if (!usernameError && formState.username !== player.username) {
+            usernameError = await validateUniqueUsername(formState.username);
+        }
 
         setErrors({
             contact: contactError,
@@ -107,7 +128,7 @@ const EditPuzzleForm = ({
             };
             try {
                 const response = await axios.patch(
-                    `http://192.168.4.46:5001/editPlayerForm/${player.player_guid}`,
+                    `${BASE_URL}/editPlayerForm/${player.player_guid}`,
                     editedPlayer
                 );
                 console.log('Player updated:', response.data);

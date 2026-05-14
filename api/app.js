@@ -24,18 +24,6 @@ const io = new Server(server, {
 app.use(express.json());
 app.use(cors());
 
-// 1. SPECIFIC API ROUTES (High Priority)
-app.get('/completedPlayers', async (req, res) => {
-    try {
-        const result = await db.query(
-            "SELECT * FROM game_players_table WHERE game_status = 'Completed' ORDER BY id DESC"
-        );
-        res.json(result.rows);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
 // 2. GENERAL ROUTER (After specific routes to avoid 404 stealing)
 try {
   const uRoutes = require("./routes/apiRoutes");

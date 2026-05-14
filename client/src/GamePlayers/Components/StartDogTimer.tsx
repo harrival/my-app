@@ -26,7 +26,8 @@ const StartDogTimer: React.FC<StartDogTimerProps> = ({ player }) => {
             tableName: "game_players_table", 
             puzzle_type: 'DOG', 
             game_status: ['Created', 'In_progress'],
-            limit: 1 
+            limit: 1,
+            orderBy: 'time_created'
           }
         });
         setDogPlayer(response.data);

@@ -152,18 +152,22 @@ const PlayerBuilder: React.FC = () => {
                     {player.username}
                   </td>
                   <td>
-                    <span
-                      className={classes.editPlayer}
-                      onClick={() => editPlayerHandler(player)}
-                    >
-                      Edit
-                    </span>
-                    <span
-                      className={classes.deletePlayer}
-                      onClick={() => deletePlayerHandler(player.player_guid)}
-                    >
-                      Delete
-                    </span>
+                    {player.game_status !== 'In_progress' && (
+                      <>
+                        <span
+                          className={classes.editPlayer}
+                          onClick={() => editPlayerHandler(player)}
+                        >
+                          Edit
+                        </span>
+                        <span
+                          className={classes.deletePlayer}
+                          onClick={() => deletePlayerHandler(player.player_guid)}
+                        >
+                          Delete
+                        </span>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -191,18 +195,22 @@ const PlayerBuilder: React.FC = () => {
                     {player.username}
                   </td>
                   <td>
-                    <span
-                      className={classes.editPlayer}
-                      onClick={() => editPlayerHandler(player)}
-                    >
-                      Edit
-                    </span>
-                    <span
-                      className={classes.deletePlayer}
-                      onClick={() => deletePlayerHandler(player.player_guid)}
-                    >
-                      Delete
-                    </span>
+                    {player.game_status !== 'In_progress' && (
+                      <>
+                        <span
+                          className={classes.editPlayer}
+                          onClick={() => editPlayerHandler(player)}
+                        >
+                          Edit
+                        </span>
+                        <span
+                          className={classes.deletePlayer}
+                          onClick={() => deletePlayerHandler(player.player_guid)}
+                        >
+                          Delete
+                        </span>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}

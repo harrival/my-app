@@ -12,7 +12,6 @@ interface StartCatTimerProps {
 }
 
 const StartCatTimer: React.FC<StartCatTimerProps> = ({ player }) => {
-  const navigate = useNavigate();
   const { refreshKey } = useRefresh();
 
   const [catPlayer, setCatPlayer] = useState<Player[]>([]);
@@ -26,7 +25,8 @@ const StartCatTimer: React.FC<StartCatTimerProps> = ({ player }) => {
             tableName: "game_players_table", 
             puzzle_type: 'CAT', 
             game_status: ['Created', 'In_progress'],
-            limit: 1 
+            limit: 1,
+            orderBy: 'time_created'
           }
         });
         setCatPlayer(response.data);
