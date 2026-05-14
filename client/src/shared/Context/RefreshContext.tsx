@@ -12,7 +12,7 @@ export const RefreshProvider: React.FC<{ children: ReactNode }> = ({ children })
 
   useEffect(() => {
     // Centralized socket connection for database updates
-    const socket = io('http://192.168.4.188:5001', {
+    const socket = io('http://192.168.4.46:5001', {
         transports: ['websocket', 'polling'],
         reconnection: true
     });

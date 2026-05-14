@@ -13,12 +13,15 @@ const DogPlayersDisplay: React.FC = () => {
   const fetchPlayers = useCallback(async () => {
     try {
       const response = await axios.get<Player[]>(`${BASE_URL}/getAll/`, {
-        params: { tableName: "game_players_table" }
+        params: { 
+          tableName: "game_players_table", 
+          puzzle_type: 'DOG', 
+          game_status: ['Created', 'In_progress'],
+          limit: 20 
+        }
       });
       // Filter for both Created and InProgress so players don't disappear while playing
       const dogs = response.data
-        .filter(p => p.puzzle_type === 'DOG' && (p.game_status === 'Created' || p.game_status === 'In_progress'))
-        // Ensure InProgress players are at the top of the list
         .sort((a, b) => {
             if (a.game_status === 'In_progress') return -1;
             if (b.game_status === 'In_progress') return 1;
@@ -33,17 +36,6 @@ const DogPlayersDisplay: React.FC = () => {
   useEffect(() => {
     fetchPlayers();
   }, [fetchPlayers]);
-
-  const deletePlayerHandler = async (playerId: string) => {
-    try {
-      const response = await axios.delete(`${BASE_URL}/deletePlayer/${playerId}`);
-      if (response.data.message === 'Deleted') {
-        setPlayers(prev => prev.filter(p => p.player_guid !== playerId));
-      }
-    } catch (error) {
-      console.error('Error deleting player:', error);
-    }
-  };
 
   return (
     <div className={classes.displaySection}>

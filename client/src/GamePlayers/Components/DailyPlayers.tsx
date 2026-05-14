@@ -11,7 +11,13 @@ const DailyPlayers = () => {
     useEffect(() => {
         const fetchUsers = async () => {
             try {
-                const response = await axios.get<Player[]>(`${BASE_URL}/completedPlayers`);
+                const response = await axios.get<Player[]>(`${BASE_URL}/completedPlayers`, {
+                    params: {
+                        limit: 3,
+                        sortBy: 'time_modified',
+                        sortDir: 'DESC'
+                    }
+                });
                 console.log(response.data);
                 setPlayedPlayers(response.data);
             } catch (error) {

@@ -15,18 +15,21 @@ const StopCatTimer: React.FC<StopCatTimerProps> = ({ player }) => {
   const navigate = useNavigate();
   const { refreshKey } = useRefresh();
 
-  const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [catPlayer, setCatPlayer] = useState<Player[]>([]);
 
   useEffect(() => {
     const fetchUsers = async () => {
-      const dbObject = {
-        tableName: "game_players_table"
-      };
       try {
         console.log('request from timer');
-        const response = await axios.get<Player[]>(`${BASE_URL}/getAll/`, { params: dbObject });
-        setAllPlayers(response.data);
+        const response = await axios.get<Player[]>(`${BASE_URL}/getAll/`, {
+          params: { 
+            tableName: "game_players_table", 
+            puzzle_type: 'CAT', 
+            game_status: 'In_progress',
+            limit: 1 
+          }
+        });
+        setCatPlayer(response.data);
       } catch (error) {
         console.error('Error fetching users:', error);
       }
@@ -34,12 +37,6 @@ const StopCatTimer: React.FC<StopCatTimerProps> = ({ player }) => {
 
     fetchUsers();
   }, [refreshKey]); // Triggers re-fetch when global refreshKey changes
-
-   useEffect(() => {
-      const cats = allPlayers.filter(player => player.puzzle_type === 'CAT' && player.game_status !== 'Completed');
-      console.log(cats[0]);
-      setCatPlayer(cats);
-    }, [allPlayers]);
 
   const isGameInProgress = catPlayer[0]?.game_status === 'In_progress';
 
@@ -76,6 +73,7 @@ const StopCatTimer: React.FC<StopCatTimerProps> = ({ player }) => {
             time_started: nowPlaying.time_started,
             time_ended: timeEnded,
             time_used: timeFormat(timeUsed),
+            time_used_in_sec: timeUsedSeconds,
             played_date: new Date().toISOString(),
             time_modified: new Date().toISOString(),
             rep_id: nowPlaying.rep_id,

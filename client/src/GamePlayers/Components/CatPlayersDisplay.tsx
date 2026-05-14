@@ -13,12 +13,15 @@ const CatPlayersDisplay: React.FC = () => {
   const fetchPlayers = useCallback(async () => {
     try {
       const response = await axios.get<Player[]>(`${BASE_URL}/getAll/`, {
-        params: { tableName: "game_players_table" }
+        params: { 
+          tableName: "game_players_table", 
+          puzzle_type: 'CAT', 
+          game_status: ['Created', 'In_progress'],
+          limit: 20 
+        }
       });
-      // Filter for both Created and InProgress so players don't disappear while playing
+      // Results are now filtered by the backend, we just sort them for display
       const cats = response.data
-        .filter(p => p.puzzle_type === 'CAT' && (p.game_status === 'Created' || p.game_status === 'In_progress'))
-        // Ensure InProgress players are at the top of the list
         .sort((a, b) => {
             if (a.game_status === 'In_progress') return -1;
             if (b.game_status === 'In_progress') return 1;

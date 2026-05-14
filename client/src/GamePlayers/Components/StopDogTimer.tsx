@@ -16,18 +16,21 @@ const StopDogTimer: React.FC<StopDogTimerProps> = ({ player }) => {
   const { refreshKey } = useRefresh();
   const [startNavigationTimer, setStartNavigationTimer] = useState(false);
 
-  const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [dogPlayer, setDogPlayer] = useState<Player[]>([]);
 
   useEffect(() => {
     const fetchUsers = async () => {
-      const dbObject = {
-        tableName: "game_players_table"
-      };
       try {
         console.log('request from timer');
-        const response = await axios.get<Player[]>(`${BASE_URL}/getAll/`, { params: dbObject });
-        setAllPlayers(response.data);
+        const response = await axios.get<Player[]>(`${BASE_URL}/getAll/`, {
+          params: { 
+            tableName: "game_players_table", 
+            puzzle_type: 'DOG', 
+            game_status: 'In_progress',
+            limit: 1 
+          }
+        });
+        setDogPlayer(response.data);
       } catch (error) {
         console.error('Error fetching users:', error);
       }
@@ -35,12 +38,6 @@ const StopDogTimer: React.FC<StopDogTimerProps> = ({ player }) => {
 
     fetchUsers();
   }, [refreshKey]); // Triggers re-fetch when global refreshKey changes
-
-   useEffect(() => {
-      const dogs = allPlayers.filter(player => player.puzzle_type === 'DOG' && player.game_status !== 'Completed');
-      console.log(dogs[0]);
-      setDogPlayer(dogs);
-    }, [allPlayers]);
 
   const isGameInProgress = dogPlayer[0]?.game_status === 'In_progress';
 
@@ -78,6 +75,7 @@ const StopDogTimer: React.FC<StopDogTimerProps> = ({ player }) => {
             time_started: nowPlaying.time_started,
             time_ended: timeEnded,
             time_used: timeFormat(timeUsed),
+            time_used_in_sec: timeUsedSeconds,
             played_date: new Date().toISOString(),
             time_modified: new Date().toISOString(),
             rep_id: nowPlaying.rep_id,

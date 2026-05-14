@@ -11,13 +11,14 @@ const TopPlayers = () => {
     useEffect(() => {
         const fetchUsers = async () => {
             try {
-                const response = await axios.get<Player[]>(`${BASE_URL}/completedPlayers`);
-                // Sort by time_used ascending (fastest first) and take the top 3
-                const sorted = response.data
-                    .filter(p => p.time_used && p.time_used !== "00:00:00")
-                    .sort((a, b) => a.time_used.localeCompare(b.time_used))
-                    .slice(0, 3);
-                setTopPlayers(sorted);
+                const response = await axios.get<Player[]>(`${BASE_URL}/completedPlayers`, {
+                    params: {
+                        limit: 3,
+                        sortBy: 'time_used_in_sec',
+                        sortDir: 'ASC'
+                    }
+                });
+                setTopPlayers(response.data);
             } catch (error) {
                 console.error('Error fetching top players:', error);
             }

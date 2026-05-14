@@ -119,7 +119,7 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers }: PuzzleFormProps)
                 fields: newPlayerWithoutId
             }
 
-        const response = await axios.post('http://192.168.4.188:5001/addToTable', dbObject);
+        const response = await axios.post('http://192.168.4.46:5001/addToTable', dbObject);
         if (response.status === 201) {
           setAllPlayers((prev) => [...prev, { ...newPlayer, game_status: 'Created' }]);
           resetForm();

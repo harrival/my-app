@@ -44,6 +44,7 @@ app.use(function (err, req, res, next) {
   });
 });
 
-app.listen(5002, function () {
-  console.log("Server is listening on port 5001");
+const PORT = 5001;
+app.listen(PORT, function () {
+  console.log(`Server is listening on port ${PORT}`);
 });

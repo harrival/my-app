@@ -9,7 +9,7 @@ const ExpressError = require("./expressError");
 
 const app = express();
 const server = http.createServer(app);
-
+// import BASE_URL from 
 // Initialize Socket.io with robust settings for multi-device testing
 const io = new Server(server, {
   cors: {
@@ -98,5 +98,5 @@ setupDbListener();
 // IMPORTANT: Use server.listen, not app.listen
 const PORT = 5001;
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on http://192.168.4.188:${PORT}`);
+  console.log(`Server running on http://192.168.4.46:${PORT}`);
 });

@@ -22,26 +22,54 @@ router.get("/reps", async function (req, res, next) {
   }
 });
 
-/** Get all items */
+/** Get items from a table with dynamic filters and limit */
 router.get("/getAll", async function (req, res, next) {
-  const { tableName } = req.query;
+  const { tableName, limit = 20, ...filters } = req.query;
   try {
-    const results = await db.query(`SELECT * FROM ${tableName} ORDER By time_created ASC`);
+    let query = `SELECT * FROM ${tableName}`;
+    const queryParams = [];
+    const filterKeys = Object.keys(filters);
+
+    if (filterKeys.length > 0) {
+      const whereClauses = filterKeys.map((key) => {
+        const value = filters[key];
+        queryParams.push(value);
+        // Use ANY($n) for array values to support OR logic on a single column
+        return Array.isArray(value)
+          ? `${key} = ANY($${queryParams.length})`
+          : `${key} = $${queryParams.length}`;
+      });
+      query += ` WHERE ${whereClauses.join(" AND ")}`;
+    }
+
+    query += ` ORDER BY time_created ASC LIMIT $${queryParams.length + 1}`;
+    queryParams.push(limit);
+
+    const results = await db.query(query, queryParams);
     return res.json(results.rows);
   } catch (err) {
     return next(err);
   }
 });
 
-/** Get top 20 players users */
+/** Get completed players with dynamic sorting and limit */
 router.get("/completedPlayers", async function (req, res, next) {
+  const { limit, sortBy, sortDir } = req.query;
+
+  // Security: Whitelist allowed sort columns to prevent SQL injection
+  const validSortColumns = ['time_used_in_sec', 'time_modified', 'time_created'];
+  const sortColumn = validSortColumns.includes(sortBy) ? sortBy : 'time_modified';
+
+  // Security: Validate sort direction
+  const direction = sortDir.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+
   try {
     const results = await db.query(
-      `SELECT player_guid, username, time_used, puzzle_type 
+      `SELECT player_guid, username, time_used, time_used_in_sec, puzzle_type, time_modified 
        FROM game_players_table 
        WHERE game_status = $1 AND DATE(time_created) = CURRENT_DATE 
-       ORDER BY time_modified ASC, 
-       LIMIT $2`, ['Completed', 20]);
+       ORDER BY ${sortColumn} ${direction}
+       LIMIT $2`, ['Completed', limit]);
 
     if (!results.rows || results.rows.length === 0) {
       return res.status(404).json({ error: "No completed players found" });
@@ -51,7 +79,6 @@ router.get("/completedPlayers", async function (req, res, next) {
     return next(err);
   }
 });
-
 
 /** (Fixed) Get users: [user, user, user] */
 

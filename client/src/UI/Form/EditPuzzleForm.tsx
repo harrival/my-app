@@ -107,7 +107,7 @@ const EditPuzzleForm = ({
             };
             try {
                 const response = await axios.patch(
-                    `http://192.168.4.188:5001/editPlayerForm/${player.player_guid}`,
+                    `http://192.168.4.46:5001/editPlayerForm/${player.player_guid}`,
                     editedPlayer
                 );
                 console.log('Player updated:', response.data);
