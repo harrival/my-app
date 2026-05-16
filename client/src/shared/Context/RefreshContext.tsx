@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { io } from 'socket.io-client';
+import { BASE_URL } from '../../shared/Utils/apiConfig'; // Import BASE_URL
 
 interface RefreshContextType {
   refreshKey: number;
@@ -9,10 +10,10 @@ const RefreshContext = createContext<RefreshContextType | undefined>(undefined);
 
 export const RefreshProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [refreshKey, setRefreshKey] = useState(0);
-
+ 
   useEffect(() => {
     // Centralized socket connection for database updates
-    const socket = io('http://192.168.4.46:5001', {
+    const socket = io(BASE_URL, {
         transports: ['websocket', 'polling'],
         reconnection: true
     });

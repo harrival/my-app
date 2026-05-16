@@ -5,6 +5,8 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const db = require('./db'); // Database client
+const middleware = require("./middleware");
+const userRoutes = require("./userRoutes");
 const ExpressError = require("./expressError");
 
 const app = express();
@@ -23,6 +25,21 @@ const io = new Server(server, {
 
 app.use(express.json());
 app.use(cors());
+app.use(middleware.logger);
+
+// Mount userRoutes
+app.use('/players', userRoutes);
+
+// Add routes from appServer.js
+app.get('/favicon.ico', (req, res) => res.sendStatus(204));
+
+app.get('/secret', middleware.checkForPassword, (req, res, next) => {
+  return res.send("I LOVE YOU <3 FOR REAL MARRY ME");
+});
+
+app.get('/private', middleware.checkForPassword, (req, res, next) => {
+  return res.send("YOU HAVE REACHED THE PRIVATE PAGE.  IT IS PRIVATE.");
+});
 
 // 2. GENERAL ROUTER (After specific routes to avoid 404 stealing)
 try {
@@ -86,5 +103,5 @@ setupDbListener();
 // IMPORTANT: Use server.listen, not app.listen
 const PORT = 5001;
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on http://192.168.4.46:${PORT}`);
+  console.log(`🚀 Server + WebSocket running on http://localhost:${PORT}`);
 });

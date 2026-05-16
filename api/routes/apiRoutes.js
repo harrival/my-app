@@ -12,7 +12,7 @@ router.get("/reps", async function (req, res, next) {
     const query = `
       SELECT rp.is_active, rp.rep_guid, ct.first_name, ct.last_name, et.event_type, et.event_location, et.event_first_date, et.event_last_date
       FROM reps_table rp
-      INNER JOIN customers_table ct ON rp.rep = ct.customer_guid
+      INNER JOIN users_table ct ON rp.rep = ct.user_guid
       INNER JOIN events_table et ON rp.event_id = et.event_guid
     `;
     const results = await db.query(query);
@@ -24,7 +24,9 @@ router.get("/reps", async function (req, res, next) {
 
 /** Get items from a table with dynamic filters and limit */
 router.get("/getAll", async function (req, res, next) {
-  const { tableName, limit = 20, orderBy, ...filters } = req.query;
+  const { tableName, limit = 20, orderBy, sortDir, ...filters } = req.query;
+   // Security: Validate sort direction
+  const direction = (sortDir || '').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
   try {
     let query = `SELECT * FROM ${tableName}`;
     const queryParams = [];
@@ -43,7 +45,7 @@ router.get("/getAll", async function (req, res, next) {
     }
 
     if (orderBy) {
-      query += ` ORDER BY ${orderBy} ASC`;
+      query += ` ORDER BY ${orderBy} ${direction}`;
     }
 
     query += ` LIMIT $${queryParams.length + 1}`;

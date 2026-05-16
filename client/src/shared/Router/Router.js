@@ -8,12 +8,13 @@ import AuthenticateUser from '../Authenticate/Auth';
 import ProfilePage from '../../user/pages/Profile';
 import PlayerBuilder from '../../GamePlayers/Components/PlayerBuilder';
 import DailyPlayers from '../../GamePlayers/Components/DailyPlayers';
-import Reps from '../../Rep/component/Reps';
+import Reps from '../../GamePlayers/Components/Reps';
 import StartCatTimer from '../../GamePlayers/Components/StartCatTimer';
 import StopCatTimer from '../../GamePlayers/Components/StopCatTimer';
 import StartDogTimer from '../../GamePlayers/Components/StartDogTimer';
 import StopDogTimer from '../../GamePlayers/Components/StopDogTimer';
 import TvDisplay from '../../GamePlayers/Components/TvDisplay';
+import Admin from '../../GamePlayers/Components/Admin';
 
 const Router = () => {
     const auth = true;
@@ -34,6 +35,7 @@ const Router = () => {
                 <Route path="/stopdog" element={<StopDogTimer />} />
                 <Route path="/tvdisplay" element={<TvDisplay />} />
                 <Route path="/Reps" element={<Reps />} />
+                <Route path="/Admin" element={<Admin />} />
                 <Route path="*" element={<Dashboard to="/" replace />} />
             </>
         );

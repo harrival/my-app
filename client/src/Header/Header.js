@@ -36,6 +36,12 @@ const Header = (props) => {
                         className={classes.link}
                         onClick={() => props.setColor("#e7ffe3")}>Reps
                     </NavLink>
+
+                    <NavLink
+                        to="/Admin"
+                        className={classes.link}
+                        onClick={() => props.setColor("#fdfae1")}>Admin
+                    </NavLink>
                 </>
             }
         </div>

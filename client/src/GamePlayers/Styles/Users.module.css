@@ -1,0 +1,85 @@
+.usersManagementPanel {
+    padding: 2rem;
+}
+
+.headerContainer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.buttonGroup {
+    display: flex;
+    gap: 12px;
+}
+
+.actionButton {
+    padding: 8px 16px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-radius: 6px;
+    border: 1px solid #ddd;
+    background-color: #ffffff;
+    transition: all 0.2s ease;
+}
+
+.actionButton:hover {
+    background-color: #f8f9fa;
+    border-color: #ccc;
+}
+
+.editButton {
+    margin-right: 8px;
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.tableTh, .tableTd {
+    padding: 12px 15px;
+    border: 1px solid #eee;
+    text-align: left;
+}
+
+.tableTd {
+    padding: 12px 15px;
+    border: 1px solid #eee;
+}
+
+.tableTh {
+    background-color: #fcfcfc;
+    font-weight: 600;
+    color: #444;
+}
+
+.tableTdCenter {
+    text-align: center;
+}
+
+/* Modal Styles */
+.modalOverlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modalContent {
+    background: white;
+    padding: 2.5rem;
+    border-radius: 12px;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+    min-width: 400px;
+}

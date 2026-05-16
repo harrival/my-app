@@ -2,21 +2,24 @@ import axios from 'axios';
 import React, { useEffect, useState } from 'react';
 
 import { prepareCustomersData } from '../../shared/Utils/prepareDBdata';
+import { BASE_URL } from '../../shared/Utils/apiConfig';
+import classes from '../../GamePlayers/Styles/Form.module.css';
 import { type NewRep } from '../../shared/Utils/prepareDBdata';
-import {type RepsTypes} from '../../Rep/component/RepsInterface';
+import {type RepsTypes} from '../../GamePlayers/Components/RepsInterface';
+import { EventType as EventInterfaceType } from '../../GamePlayers/Components/EventInterface';
 
 interface AddRepProps {
     setShowAddRep: (value: boolean) => void;
 }
 interface Representative {
     RepGUID: string;
+    // user_guid: string; // This should be user_guid, not CustomerGUID
     CustomerGUID: string;
     FirstName: string;
     LastName: string;
     IsActive: boolean;
     EventFirstDate: string;
     EventLastDate: string;
-    EventLocation: string;
     EventType: string;
 }
 
@@ -24,19 +27,40 @@ const AddRepForm = ({ setShowAddRep }: AddRepProps) => {
     const [reps, setReps] = useState<NewRep[]>([]);
     const [firstNameOptions, setFirstNameOptions] = useState<string[]>([]);
     const [lastNameOptions, setLastNameOptions] = useState<string[]>([]);
-    const [rep, setRep] = useState<Representative | null>(null);
+    const [events, setEvents] = useState<EventInterfaceType[]>([]);
+    const [rep, setRep] = useState<Partial<Representative>>({}); // Use Partial for initial empty state
+    const [errors, setErrors] = useState({
+        FirstName: '',
+        LastName: '',
+        EventType: '',
+        CustomerGUID: '',
+        EventFirstDate: '',
+        EventLastDate: ''
+    });
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
-        if (rep) {
-            setRep({ ...rep, [name]: value });
+
+        if (name === 'EventType') {
+            const selectedEvent = events.find(ev => ev.event_guid === value);
+            setRep(prev => ({
+                ...prev,
+                EventType: value,
+                EventFirstDate: selectedEvent ? new Date(selectedEvent.event_first_date).toISOString().split('T')[0] : '',
+                EventLastDate: selectedEvent ? new Date(selectedEvent.event_last_date).toISOString().split('T')[0] : '',
+            }));
+        } else {
+            setRep(prev => ({ ...prev, [name]: value }));
         }
+
+        setErrors(prev => ({ ...prev, [name]: '' }));
     };
 
     const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
         const { name, value } = e.target;
+        setErrors(prev => ({ ...prev, [name]: '', CustomerGUID: '' }));
         const selectedRep = reps.filter(rep => rep[name as keyof NewRep] === value);
-
+        
         if (selectedRep.length === 1) {
             setRep({
                 ...rep,
@@ -44,7 +68,7 @@ const AddRepForm = ({ setShowAddRep }: AddRepProps) => {
                 FirstName: selectedRep[0]?.FirstName,
                 LastName: selectedRep[0]?.LastName,
             } as Representative);
-        } else if (selectedRep.length > 1 && name === 'FirstName') {
+        } else if (selectedRep.length > 1 && name === 'FirstName') { // This logic seems complex for simple selection
             // Handle multiple selections
             const hasLastName = rep?.LastName;
             if (hasLastName) {
@@ -93,27 +117,69 @@ const AddRepForm = ({ setShowAddRep }: AddRepProps) => {
         }
     };
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        // console.log('Form Submitted:', newRep);
-        // Add your form submission logic here
+
+        const newErrors = {
+            FirstName: !rep.FirstName ? 'First name is required' : '',
+            LastName: !rep.LastName ? 'Last name is required' : '',
+            EventType: !rep.EventType ? 'Please select an event' : '',
+            CustomerGUID: !rep.CustomerGUID ? 'Please select a valid customer' : '',
+            EventFirstDate: !rep.EventFirstDate ? 'First date is required' : '',
+            EventLastDate: !rep.EventLastDate ? 'Last date is required' : ''
+        };
+
+        if (rep.EventFirstDate && rep.EventLastDate && new Date(rep.EventLastDate) < new Date(rep.EventFirstDate)) {
+            newErrors.EventLastDate = 'Event last date cannot be less than event first date';
+        }
+
+        setErrors(newErrors);
+        if (Object.values(newErrors).some(err => err !== '')) return;
+
+        console.log('Form Submitted:', rep);
+        try {
+            // Assuming 'rep' state holds the data for the new representative
+            // You'll need to map 'rep' fields to your 'reps_table' schema
+            const response = await axios.post(`${BASE_URL}/addToTable`, {
+                tableName: 'reps_table',
+                fields: {
+                    rep_guid: crypto.randomUUID(), // Generate a new GUID
+                    rep: rep.CustomerGUID, // Assuming CustomerGUID maps to rep column in reps_table
+                    event_id: rep.EventType, // Selected Event GUID
+                    is_active: rep.IsActive || false,
+                }
+            });
+            console.log('Representative added:', response.data);
+            setShowAddRep(false); // Close the form
+            // You might want to trigger a refresh in the parent Reps component here
+        } catch (error) {
+            console.error('Error adding representative:', error);
+            alert('Failed to add representative.');
+        }
     };
 
     useEffect(() => {
-    const fetchUsers = async () => {
-      const dbObject = {
-        tableName: "customers_table"
-      };
+    const fetchData = async () => {
       try {
-        const response = await axios.get('http://localhost:5001/getAll/', { params: dbObject });
-        const preparedData = prepareCustomersData(response.data);
-        setReps(preparedData);
+        const [customersRes, eventsRes] = await Promise.all([
+            axios.get(`${BASE_URL}/getAll/`, { 
+                params: { 
+                    tableName: "users_table",
+                    // Exclude 'Customer' by only requesting 'Admin' and 'Rep' groups
+                    permission_group: ['Admin', 'Rep']
+                } 
+            }),
+            axios.get(`${BASE_URL}/getAll/`, { params: { tableName: "events_table" } })
+        ]);
+
+        setReps(prepareCustomersData(customersRes.data));
+        setEvents(eventsRes.data);
       } catch (error) {
-        console.error('Error fetching users:', error);
+        console.error('Error fetching data:', error);
       }
     };
 
-    fetchUsers();
+    fetchData();
   }, []);
 
   useEffect(() => {
@@ -124,110 +190,114 @@ const AddRepForm = ({ setShowAddRep }: AddRepProps) => {
   }, [reps]);
 
     return (
-        <form onSubmit={handleSubmit}>
-            <div className="input-group" style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'space-between' }}>
-            <label htmlFor="firstName" style={{ display: 'inline-block', flex: '1' }}>First Name:</label>
-            <select
+        <div className={classes.modalOverlay}>
+            <div className={classes.modalContent}>
+                <form onSubmit={handleSubmit}>
+                    <div className={classes.formGroup}>
+                        <label htmlFor="firstName" className={classes.formLabel}>First Name:</label>
+                        <select
                 id="firstName"
                 name="FirstName"
+                className={classes.formSelect}
                 value={rep?.FirstName || ''}
                 onChange={handleSelectChange}
-                style={{ display: 'inline-block', flex: '2' }}
             >
-                <option value="" disabled>Select your first name</option>
+                <option value="">Select First Name</option>
                 {firstNameOptions.map((firstName) => (
                 <option key={firstName} value={firstName}>
                     {firstName}
                 </option>
                 ))}
             </select>
-            </div>
-            <div className="input-group" style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'space-between' }}>
-            <label htmlFor="lastName" style={{ display: 'inline-block', flex: '1' }}>Last Name:</label>
-            <select
+                        {errors.FirstName && <p className={classes.errorText}>{errors.FirstName}</p>}
+                    </div>
+                    <div className={classes.formGroup}>
+                        <label htmlFor="lastName" className={classes.formLabel}>Last Name:</label>
+                        <select
                 id="lastName"
                 name="LastName"
+                className={classes.formSelect}
                 value={rep?.LastName || ''}
                 onChange={handleSelectChange}
-                style={{ display: 'inline-block', flex: '2' }}
             >
-                <option value="" disabled>Select your last name</option>
+                <option value="">Select Last Name</option>
                 {lastNameOptions.map((lastName) => (
                 <option key={lastName} value={lastName}>
                     {lastName}
                 </option>
                 ))}
             </select>
-            </div>
-            <div className="input-group" style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'space-between' }}>
-            <label htmlFor="eventType" style={{ display: 'inline-block', flex: '1' }}>Event Type:</label>
-            <input
+                        {errors.LastName && <p className={classes.errorText}>{errors.LastName}</p>}
+                    </div>
+                    <div className={classes.formGroup}>
+                        <label htmlFor="eventType" className={classes.formLabel}>Event Type:</label>
+                        <select
                 id="eventType"
-                name="eventType"
-                type="text"
-                placeholder="Enter event type"
+                name="EventType"
                 value={rep?.EventType || ''}
                 onChange={handleChange}
-                style={{ display: 'inline-block', flex: '2' }}
-            />
-            </div>
-            <div className="input-group" style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'space-between' }}>
-            <label htmlFor="eventFirstDate" style={{ display: 'inline-block', flex: '1' }}>Event First Date:</label>
-            <input
+                className={classes.formSelect}
+            >
+                <option value="">Select an Event</option>
+                {events.map((event) => (
+                    <option key={event.event_guid} value={event.event_guid}>
+                        {event.event_type}
+                    </option>
+                ))}
+            </select>
+                        {errors.EventType && <p className={classes.errorText}>{errors.EventType}</p>}
+                    </div>
+                    <div className={classes.formGroup}>
+                        <label htmlFor="eventFirstDate" className={classes.formLabel}>Event First Date:</label>
+                        <input
                 id="eventFirstDate"
-                name="eventFirstDate"
-                type="text"
-                disabled={true}
+                name="EventFirstDate"
+                type="date"
                 placeholder='Enter event first date'
                 value={rep?.EventFirstDate || ''}
                 onChange={handleChange}
-                style={{ display: 'inline-block', flex: '2' }}
+                className={classes.formInput}
+                readOnly
+                disabled
             />
-            </div>
-            <div className="input-group" style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'space-between' }}>
-            <label htmlFor="eventLastDate" style={{ display: 'inline-block', flex: '1' }}>Event Last Date:</label>
-            <input
+                        {errors.EventFirstDate && <p className={classes.errorText}>{errors.EventFirstDate}</p>}
+                    </div>
+                    <div className={classes.formGroup}>
+                        <label htmlFor="eventLastDate" className={classes.formLabel}>Event Last Date:</label>
+                        <input
                 id="eventLastDate"
-                name="eventLastDate"
-                type="text"
-                disabled={true}
+                name="EventLastDate"
+                type="date"
                 placeholder='Enter event last date'
                 value={rep?.EventLastDate || ''}
                 onChange={handleChange}
-                style={{ display: 'inline-block', flex: '2' }}
+                className={classes.formInput}
+                readOnly
+                disabled
             />
-            </div>
-            <div className="input-group" style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'space-between' }}>
-            <label htmlFor="eventLocation" style={{ display: 'inline-block', flex: '1' }}>Event Location:</label>
-            <input
-                id="eventLocation"
-                name="eventLocation"
-                type="text"
-                disabled={true}
-                placeholder="Enter event location"
-                value={rep?.EventLocation || ''}
-                onChange={handleChange}
-                style={{ display: 'inline-block', flex: '2' }}
-            />
-            </div>
-            <div className="input-group" style={{ display: 'flex', alignItems: 'center', gap: '15px', justifyContent: 'space-between' }}>
-            <label htmlFor="isActive" style={{ display: 'inline-block', flex: '1', fontSize: '1.2rem' }}>Is Active:</label>
-            <input
+                        {errors.EventLastDate && <p className={classes.errorText}>{errors.EventLastDate}</p>}
+                    </div>
+                    {errors.CustomerGUID && <p className={classes.errorText}>{errors.CustomerGUID}</p>}
+                    <div className={classes.checkboxGroup}>
+                        <label htmlFor="isActive" className={classes.formLabel}>Is Active:</label>
+                        <input
                 id="isActive"
-                name="isActive"
+                name="IsActive"
                 type="checkbox"
                 checked={rep?.IsActive || false}
-                // onChange={(e) =>
-                // setRep({ ...rep, IsActive: e.target.checked })
-                // }
-                style={{ display: 'inline-block', flex: '2', transform: 'scale(1.5)' }}
+                onChange={(e) => {
+                    setRep(prev => ({ ...prev, IsActive: e.target.checked }));
+                }}
+                className={classes.checkboxInput}
             />
+                    </div>
+                    <div className={classes.buttonContainer}>
+                        <button type="submit" className={`${classes.formButton} ${classes.primary}`}>Submit</button>
+                        <button type="button" className={`${classes.formButton} ${classes.secondary}`} onClick={() => setShowAddRep(false)}>Cancel</button>
+                    </div>
+                </form>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '20px' }}>
-                <button type="submit" style={{ flex: '1', marginRight: '10px' }}>Submit</button>
-                <button type="button" style={{ flex: '1', marginLeft: '10px' }} onClick={() => setShowAddRep(false)}>Cancel</button>
-            </div>
-        </form>
+        </div>
     );
 };
 

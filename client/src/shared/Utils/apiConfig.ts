@@ -1,1 +1,5 @@
-export const BASE_URL = 'http://192.168.4.46:5001';
+declare var process: { env: { [key: string]: string | undefined } };
+
+const BASE_URL: string = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5001';
+
+export { BASE_URL };

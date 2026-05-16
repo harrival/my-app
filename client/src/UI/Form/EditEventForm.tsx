@@ -2,20 +2,27 @@ import React, { useState, useEffect } from 'react';
 import classes from '../../GamePlayers/Styles/Form.module.css';
 import axios from 'axios';
 import { BASE_URL } from '../../shared/Utils/apiConfig';
+import { EventType } from '../../GamePlayers/Components/EventInterface';
 
-interface AddEventFormProps {
+interface EditEventFormProps {
+    event: EventType;
     onClose: () => void;
     onSuccess: () => void;
 }
 
-const AddEventForm: React.FC<AddEventFormProps> = ({ onClose, onSuccess }) => {
+const EditEventForm: React.FC<EditEventFormProps> = ({ event, onClose, onSuccess }) => {
+    // Format dates for input type="date"
+    const formatToDateInput = (isoString: string) => {
+        if (!isoString) return '';
+        const date = new Date(isoString);
+        return date.toISOString().split('T')[0];
+    };
+
     const [formData, setFormData] = useState({
-        event_type: '',
-        event_location: '',
-        event_first_date: '',
-        event_last_date: '',
-        event_type_created_by: '',
-        is_active: true,
+        ...event,
+        event_first_date: formatToDateInput(event.event_first_date),
+        event_last_date: formatToDateInput(event.event_last_date),
+        event_type_created_by: (event as any).event_type_created_by || '',
     });
     const [users, setUsers] = useState<any[]>([]);
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -35,7 +42,14 @@ const AddEventForm: React.FC<AddEventFormProps> = ({ onClose, onSuccess }) => {
             }
         };
         fetchUsers();
-    }, []);
+
+        setFormData({
+            ...event,
+            event_first_date: formatToDateInput(event.event_first_date),
+            event_last_date: formatToDateInput(event.event_last_date),
+            event_type_created_by: (event as any).event_type_created_by || '',
+        });
+    }, [event]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
@@ -52,11 +66,7 @@ const AddEventForm: React.FC<AddEventFormProps> = ({ onClose, onSuccess }) => {
 
         const newErrors: Record<string, string> = {};
         if (!formData.event_type) newErrors.event_type = "Event type is required";
-        if (!formData.event_location) newErrors.event_location = "Location is required";
-        if (!formData.event_first_date) newErrors.event_first_date = "Start date is required";
-        if (!formData.event_last_date) newErrors.event_last_date = "End date is required";
         if (!formData.event_type_created_by) newErrors.event_type_created_by = "Creator selection is required";
-        
         if (formData.event_first_date && formData.event_last_date) {
             if (new Date(formData.event_first_date) > new Date(formData.event_last_date)) {
                 newErrors.event_last_date = "End date cannot be before start date";
@@ -66,30 +76,27 @@ const AddEventForm: React.FC<AddEventFormProps> = ({ onClose, onSuccess }) => {
         setErrors(newErrors);
         if (Object.keys(newErrors).length > 0) return;
 
-        console.log('Submitting new event:', formData);
+        console.log('Updating event:', formData);
         try {
-            const response = await axios.post(`${BASE_URL}/addToTable`, {
+            const response = await axios.patch(`${BASE_URL}/editPlayerForm/${formData.event_guid}`, {
                 tableName: 'events_table',
-                fields: {
-                    event_guid: crypto.randomUUID(), // Generate a new GUID
-                    ...formData,
-                    time_created: new Date().toISOString(),
-                    time_modified: new Date().toISOString(),
-                }
+                idColumn: 'event_guid',
+                ...formData,
+                time_modified: new Date().toISOString(),
             });
-            console.log('Event added:', response.data);
+            console.log('Event updated:', response.data);
             onSuccess();
             onClose();
         } catch (error) {
-            console.error('Error adding event:', error);
-            alert('Failed to add event.');
+            console.error('Error updating event:', error);
+            alert('Failed to update event.');
         }
     };
 
     return (
         <div className={classes.modalOverlay}>
             <div className={classes.modalContent}>
-                <h2>Add New Event</h2>
+                <h2>Edit Event: {event.event_type}</h2>
                 <form onSubmit={handleSubmit}>
                     <div className={classes.formGroup}>
                         <label htmlFor="event_type" className={classes.formLabel}>Event Type:</label>
@@ -115,7 +122,6 @@ const AddEventForm: React.FC<AddEventFormProps> = ({ onClose, onSuccess }) => {
                             onChange={handleChange}
                             required
                         />
-                        {errors.event_location && <p className={classes.errorText}>{errors.event_location}</p>}
                     </div>
                     <div className={classes.formGroup}>
                         <label htmlFor="event_first_date" className={classes.formLabel}>Start Date:</label>
@@ -128,7 +134,6 @@ const AddEventForm: React.FC<AddEventFormProps> = ({ onClose, onSuccess }) => {
                             onChange={handleChange}
                             required
                         />
-                        {errors.event_first_date && <p className={classes.errorText}>{errors.event_first_date}</p>}
                     </div>
                     <div className={classes.formGroup}>
                         <label htmlFor="event_last_date" className={classes.formLabel}>End Date:</label>
@@ -143,7 +148,7 @@ const AddEventForm: React.FC<AddEventFormProps> = ({ onClose, onSuccess }) => {
                         />
                         {errors.event_last_date && <p className={classes.errorText}>{errors.event_last_date}</p>}
                     </div>
-                    <div className={classes.formGroup}>
+                    <div className={classes.checkboxGroup}>
                         <label htmlFor="event_type_created_by" className={classes.formLabel}>Created By:</label>
                         <select
                             id="event_type_created_by"
@@ -174,7 +179,7 @@ const AddEventForm: React.FC<AddEventFormProps> = ({ onClose, onSuccess }) => {
                         />
                     </div>
                     <div className={classes.buttonContainer}>
-                        <button type="submit" className={`${classes.formButton} ${classes.primary}`}>Add Event</button>
+                        <button type="submit" className={`${classes.formButton} ${classes.primary}`}>Save Changes</button>
                         <button type="button" className={`${classes.formButton} ${classes.secondary}`} onClick={onClose}>Cancel</button>
                     </div>
                 </form>
@@ -183,4 +188,4 @@ const AddEventForm: React.FC<AddEventFormProps> = ({ onClose, onSuccess }) => {
     );
 };
 
-export default AddEventForm;
+export default EditEventForm;

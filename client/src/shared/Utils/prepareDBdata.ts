@@ -1,4 +1,4 @@
-import {type RepsTypes} from '../../Rep/component/RepsInterface';
+import {type RepsTypes} from '../../GamePlayers/Components/RepsInterface';
 
 interface RawRepsData {
     rep_guid: string;
@@ -13,7 +13,7 @@ interface RawRepsData {
 
 interface RawCustomersData {
     address: string;
-    customer_guid: string;
+    user_guid: string;
     email: string;
     first_name: string;
     id: number;
@@ -45,7 +45,7 @@ export const prepareRepsData = (data: RawRepsData[]): RepsTypes[] => {
 
 export const prepareCustomersData = (data: RawCustomersData[]): NewRep[] => {
     return data.map((item): NewRep => ({
-        CustomerGUID: item.customer_guid,
+        CustomerGUID: item.user_guid,
         FirstName: item.first_name,
         LastName: item.last_name
     }));

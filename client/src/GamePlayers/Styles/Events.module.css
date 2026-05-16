@@ -1,0 +1,28 @@
+.eventsManagementPanel {
+    padding: 2rem;
+}
+
+.headerContainer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+}
+
+.buttonGroup {
+    display: flex;
+    gap: 10px;
+}
+
+.table {
+    width: 100%;
+    margin-top: 1rem;
+    border-collapse: collapse;
+    background: white;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.tableTh, .tableTd {
+    padding: 12px 15px;
+    border: 1px solid #eee;
+}

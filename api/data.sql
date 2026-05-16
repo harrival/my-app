@@ -1,19 +1,13 @@
-DROP TABLE IF EXISTS users;
-DROP TABLE IF EXISTS game_players_table;
-DROP TABLE IF EXISTS que_number_table;
-CREATE TABLE users (
-    id SERIAL PRIMARY KEY,
-    name TEXT NOT NULL,
-    type TEXT NOT NULL
-);
+DROP TABLE IF EXISTS game_players_table CASCADE;
+DROP TABLE IF EXISTS que_number_table CASCADE;
+DROP TABLE IF EXISTS reps_table CASCADE;
+DROP TABLE IF EXISTS puzzles_type CASCADE;
+DROP TABLE IF EXISTS events_table CASCADE;
+DROP TABLE IF EXISTS users_table CASCADE;
 
-INSERT INTO users (name, type) VALUES ('Juanita', 'admin');
-INSERT INTO users (name, type) VALUES ('Jenny', 'staff');
-INSERT INTO users (name, type) VALUES ('Jeff', 'user');
-
-CREATE TABLE IF NOT EXISTS customers_table (
+CREATE TABLE IF NOT EXISTS users_table (
     id SERIAL,
-    customer_guid VARCHAR(50) PRIMARY KEY,
+    user_guid VARCHAR(50) PRIMARY KEY,
     first_name VARCHAR(50),
     last_name VARCHAR(50),
     email VARCHAR(100),
@@ -31,7 +25,11 @@ CREATE TABLE IF NOT EXISTS events_table (
     event_location VARCHAR(100),
     event_first_date DATE,
     event_last_date DATE,
-    event_created_by VARCHAR(50)
+    is_active BOOLEAN DEFAULT true,
+    event_type_created_by VARCHAR(50),
+    time_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    time_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (event_type_created_by) REFERENCES users_table(user_guid)
 );
 
 CREATE TABLE IF NOT EXISTS puzzles_type (
@@ -42,7 +40,7 @@ CREATE TABLE IF NOT EXISTS puzzles_type (
     puzzle_type_created_by VARCHAR(50),
     time_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     time_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (puzzle_type_created_by) REFERENCES customers_table(customer_guid)
+    FOREIGN KEY (puzzle_type_created_by) REFERENCES users_table(user_guid)
 );
 
 CREATE TABLE IF NOT EXISTS reps_table (
@@ -51,7 +49,7 @@ CREATE TABLE IF NOT EXISTS reps_table (
     rep VARCHAR(50),
     event_id VARCHAR(50),
     is_active BOOLEAN,
-    FOREIGN KEY (rep) REFERENCES customers_table(customer_guid),
+    FOREIGN KEY (rep) REFERENCES users_table(user_guid),
     FOREIGN KEY (event_id) REFERENCES events_table(event_guid)
 );
 
@@ -79,18 +77,20 @@ CREATE TABLE IF NOT EXISTS game_players_table (
 
 CREATE TABLE IF NOT EXISTS que_number_table (
     id SERIAL,
-    last_number INTEGER
+    last_number INTEGER,
+    event_id VARCHAR(50),
+    FOREIGN KEY (event_id) REFERENCES events_table(event_guid)
 );
 
-INSERT INTO customers_table (customer_guid, first_name, last_name, email, phone_number, address, permission_group, is_admin) VALUES
+INSERT INTO users_table (user_guid, first_name, last_name, email, phone_number, address, permission_group, is_admin) VALUES
 ('GUID1000', 'Uche', 'Nwosu', 'uchenwosu@gmail.com', '1111111111', '123 street city state, usa 12345', 'Admin', true),
 ('GUID1001', 'Obinna', 'Agu', 'obinnaagu@gmail.com', '1111111112', '456 street city state, usa 12345', 'Rep', false),
 ('GUID1002', 'Onyi', 'Okeke', 'onyiokeke@gmail.com', '1111111113', '789 street city state, usa 12345', 'Customer', false);
 
-INSERT INTO events_table (event_guid, event_type, event_location, event_first_date, event_last_date) VALUES
-('GUID2000', 'Peoria Fair', 'Peoria Illinios', '2025-06-30', '2025-07-07'),
-('GUID3000', 'Illinios State Fair', 'Spring Illinios', '2025-07-09', '2025-07-16'),
-('GUID4000', 'Indiana State Fair', 'Indianapolis Indiana', '2025-07-18', '2025-07-25');
+INSERT INTO events_table (event_guid, event_type, event_location, event_first_date, event_last_date, event_type_created_by) VALUES
+('GUID2000', 'Peoria Fair', 'Peoria Illinios', '2025-06-30', '2025-07-07', 'GUID1000'),
+('GUID3000', 'Illinios State Fair', 'Spring Illinios', '2025-07-09', '2025-07-16', 'GUID1000'),
+('GUID4000', 'Indiana State Fair', 'Indianapolis Indiana', '2025-07-18', '2025-07-25', 'GUID1000');
 
 INSERT INTO puzzles_type (puzzle_type_guid, puzzle_name, is_archived, puzzle_type_created_by) VALUES
 ('GUID20001', 'CAT', false, 'GUID1000'),
