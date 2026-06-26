@@ -1,4 +1,2 @@
 [build]
-
-[variables]
-CI = "false"
+buildCommand = "CI=false npm run build"
