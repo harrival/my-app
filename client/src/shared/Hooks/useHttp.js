@@ -1,6 +1,10 @@
 import { useState, useCallback } from "react";
 
 const useHttp = () => {
+    // Read the backend base URL from the environment variable.
+    // Falls back to an empty string so relative URLs are used in local development.
+    const apiUrl = process.env.REACT_APP_API_URL || '';
+
     // allow loading state
     const [isLoading, setIsLoading] = useState(false);
     // allow error state
@@ -15,7 +19,7 @@ const useHttp = () => {
       setError(null);
       try {
         const response = await fetch(
-            requestConfig.url, {
+            `${apiUrl}${requestConfig.url}`, {
                 // If no method is specified then default to GET request
                 method: requestConfig.method ? requestConfig.method : 'GET',
                 // If no headers specified then default to {}
