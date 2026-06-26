@@ -7,11 +7,14 @@ let DB_URI;
 if (process.env.NODE_ENV === "test") {
   DB_URI = "postgresql:///triplegreatedb_test";
 } else {
-  DB_URI = "postgresql:///triplegreatedb";
+  DB_URI = process.env.DATABASE_URL || "postgresql:///triplegreatedb";
 }
 
 const db = new Pool({
-  connectionString: DB_URI
+  connectionString: DB_URI,
+  ...(process.env.DATABASE_URL && {
+    ssl: { rejectUnauthorized: false }
+  })
 });
 
 // Test connection and handle errors
