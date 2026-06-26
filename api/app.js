@@ -98,7 +98,11 @@ const setupDbListener = async () => {
   }
 };
 
-setupDbListener();
+setupDbListener().catch((err) => {
+  console.error('❌ Unhandled error in setupDbListener — DB listener will not be active:', err);
+  // Do not rethrow: the HTTP server should remain fully operational
+  // without real-time DB notifications.
+});
 
 // IMPORTANT: Use server.listen, not app.listen
 const PORT = process.env.PORT || 5001;
