@@ -1,4 +1,4 @@
 [build]
 
-[build.variables]
+[variables]
 CI = "false"
