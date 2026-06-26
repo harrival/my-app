@@ -5,6 +5,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const db = require('./db'); // Database client
+const { initializeDatabase } = require('./initDb');
 const middleware = require("./middleware");
 const userRoutes = require("./userRoutes");
 const ExpressError = require("./expressError");
@@ -98,10 +99,21 @@ const setupDbListener = async () => {
   }
 };
 
-setupDbListener();
-
 // IMPORTANT: Use server.listen, not app.listen
 const PORT = process.env.PORT || 5001;
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server + WebSocket running on http://localhost:${PORT}`);
-});
+
+async function startServer() {
+  try {
+    await initializeDatabase();
+  } catch (err) {
+    console.error("❌ Database initialization failed, continuing anyway:", err.message);
+  }
+
+  setupDbListener();
+
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🚀 Server + WebSocket running on http://localhost:${PORT}`);
+  });
+}
+
+startServer();
