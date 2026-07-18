@@ -108,7 +108,7 @@ setupDbListener().catch((err) => {
 });
 
 // IMPORTANT: Use server.listen, not app.listen
-const PORT = process.env.PORT || 5001;
+const PORT = process.env.PORT || 8080;
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server + WebSocket running on http://localhost:${PORT}`);
+  console.log(`🚀 Server + WebSocket running on ${PORT}`);
 });
