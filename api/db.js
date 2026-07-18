@@ -11,7 +11,7 @@ if (process.env.NODE_ENV === "test") {
 }
 
 const db = new Pool({
-  connectionString: DATABASE_URL,
+  connectionString: DB_URI,
   ...(process.env.DATABASE_URL && {
     ssl: { rejectUnauthorized: false }
   })
