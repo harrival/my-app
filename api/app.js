@@ -24,7 +24,10 @@ const io = new Server(server, {
 });
 
 app.use(express.json());
-app.use(cors());
+app.use(cors({
+  origin: 'https://my-app-frontend-production-34ef.up.railway.app', // Your frontend domain
+  credentials: true
+}));
 app.use(middleware.logger);
 
 // Mount userRoutes
