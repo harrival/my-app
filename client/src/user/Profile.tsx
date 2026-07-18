@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 // import { Customer } from './UserInterface';
-import CreateProfile from '../../UI/Form/CreateProfileForm';
-import Card from '../../UI/Card/Card';
+import CreateProfile from '../UI/Form/CreateProfileForm';
+import Card from '../UI/Card/Card';
 
 const ProfilePage = () => {
     const [hasProfile, setHasProfile] = useState(false); // State to determine if the user has a profile

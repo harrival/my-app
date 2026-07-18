@@ -3,6 +3,7 @@ import classes from '../Styles/Admin.module.css';
 import Reps from './Reps';
 import Events from './Events';
 import Users from './Users';
+import NumberQue from './NumberQue';
 
 const Admin: React.FC = () => {
     const [activeTable, setActiveTable] = useState<string | null>(null);
@@ -17,6 +18,10 @@ const Admin: React.FC = () => {
 
     if (activeTable === 'events') {
         return <Events onBack={() => setActiveTable(null)} />;
+    }
+
+    if (activeTable === 'que') {
+        return <NumberQue onBack={() => setActiveTable(null)} />;
     }
 
     return (
@@ -45,7 +50,13 @@ const Admin: React.FC = () => {
                 >
                     Reps table
                 </button>
-                <button className={classes.adminButton} type="button">Que number table</button>
+                <button 
+                    className={classes.adminButton} 
+                    type="button"
+                    onClick={() => setActiveTable('que')}
+                >
+                    Que number table
+                </button>
             </div>
         </div>
     );

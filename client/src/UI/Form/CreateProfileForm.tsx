@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { type Customer } from "../../user/pages/UserInterface";
+import { type Customer } from "../../user/UserInterface";
 import axios from "axios";
 import { BASE_URL } from "../../shared/Utils/apiConfig";
 

@@ -26,6 +26,21 @@ const AddUserForm: React.FC<AddUserFormProps> = ({ onClose, onSuccess }) => {
         permission_group: 'user',
     });
 
+    const validateUniqueEmail = async (email: string): Promise<string> => {
+        try {
+            const response = await axios.get(`${BASE_URL}/getOne`, {
+                params: {
+                    tableName: "users_table",
+                    email: email
+                }
+            });
+            return response.data ? 'Email already exists' : '';
+        } catch (error) {
+            console.error('Error checking email uniqueness:', error);
+            return '';
+        }
+    };
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
@@ -51,6 +66,12 @@ const AddUserForm: React.FC<AddUserFormProps> = ({ onClose, onSuccess }) => {
         }
 
         // Placeholder for actual API call
+        const emailDuplicateError = await validateUniqueEmail(formData.email);
+        if (emailDuplicateError) {
+            setErrors(prev => ({ ...prev, email: emailDuplicateError }));
+            return;
+        }
+
         console.log('Submitting new user:', formData);
         try {
             // Example API call (replace with your actual /addToTable endpoint logic)
