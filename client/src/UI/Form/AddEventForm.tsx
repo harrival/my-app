@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import classes from '../../GamePlayers/Styles/Form.module.css';
 import axios from 'axios';
 import { BASE_URL } from '../../shared/Utils/apiConfig';
+import { useUserProfile } from '../../shared/Context/UserProfileContext';
 
 interface AddEventFormProps {
     onClose: () => void;
@@ -9,6 +10,8 @@ interface AddEventFormProps {
 }
 
 const AddEventForm: React.FC<AddEventFormProps> = ({ onClose, onSuccess }) => {
+    const { profile } = useUserProfile();
+
     const [formData, setFormData] = useState({
         event_type: '',
         event_location: '',
@@ -16,33 +19,27 @@ const AddEventForm: React.FC<AddEventFormProps> = ({ onClose, onSuccess }) => {
         event_last_date: '',
         event_type_created_by: '',
         is_active: true,
+        business: '',
     });
-    const [users, setUsers] = useState<any[]>([]);
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [isLongTermEvent, setIsLongTermEvent] = useState<boolean>(false);
 
     useEffect(() => {
-        const fetchUsers = async () => {
-            try {
-                const response = await axios.get(`${BASE_URL}/getAll/`, {
-                    params: {
-                        tableName: "users_table",
-                        permission_group: ['Admin']
-                    }
-                });
-                setUsers(response.data);
-            } catch (error) {
-                console.error('Error fetching users:', error);
-            }
-        };
-        fetchUsers();
-    }, []);
+        const userBusiness = profile?.business || profile?.business_value || '';
+        const userGuid = profile?.user_guid || '';
+        setFormData(prev => ({
+            ...prev,
+            business: userBusiness,
+            event_type_created_by: userGuid,
+        }));
+    }, [profile]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value, type } = e.target;
         const checked = type === 'checkbox' ? (e.target as HTMLInputElement).checked : undefined;
-        setFormData(prev => ({ 
-            ...prev, 
-            [name]: type === 'checkbox' ? checked : value 
+        setFormData(prev => ({
+            ...prev,
+            [name]: type === 'checkbox' ? checked : value
         }));
         setErrors(prev => ({ ...prev, [name]: '' }));
     };
@@ -53,13 +50,14 @@ const AddEventForm: React.FC<AddEventFormProps> = ({ onClose, onSuccess }) => {
         const newErrors: Record<string, string> = {};
         if (!formData.event_type) newErrors.event_type = "Event type is required";
         if (!formData.event_location) newErrors.event_location = "Location is required";
-        if (!formData.event_first_date) newErrors.event_first_date = "Start date is required";
-        if (!formData.event_last_date) newErrors.event_last_date = "End date is required";
-        if (!formData.event_type_created_by) newErrors.event_type_created_by = "Creator selection is required";
-        
-        if (formData.event_first_date && formData.event_last_date) {
-            if (new Date(formData.event_first_date) > new Date(formData.event_last_date)) {
-                newErrors.event_last_date = "End date cannot be before start date";
+
+        if (!isLongTermEvent) {
+            if (!formData.event_first_date) newErrors.event_first_date = "Start date is required";
+            if (!formData.event_last_date) newErrors.event_last_date = "End date is required";
+            if (formData.event_first_date && formData.event_last_date) {
+                if (new Date(formData.event_first_date) > new Date(formData.event_last_date)) {
+                    newErrors.event_last_date = "End date cannot be before start date";
+                }
             }
         }
 
@@ -73,6 +71,8 @@ const AddEventForm: React.FC<AddEventFormProps> = ({ onClose, onSuccess }) => {
                 fields: {
                     event_guid: crypto.randomUUID(), // Generate a new GUID
                     ...formData,
+                    event_first_date: isLongTermEvent ? null : formData.event_first_date,
+                    event_last_date: isLongTermEvent ? null : formData.event_last_date,
                     time_created: new Date().toISOString(),
                     time_modified: new Date().toISOString(),
                 }
@@ -117,51 +117,47 @@ const AddEventForm: React.FC<AddEventFormProps> = ({ onClose, onSuccess }) => {
                         />
                         {errors.event_location && <p className={classes.errorText}>{errors.event_location}</p>}
                     </div>
-                    <div className={classes.formGroup}>
-                        <label htmlFor="event_first_date" className={classes.formLabel}>Start Date:</label>
+                    <div className={classes.checkboxGroup} style={{ marginBottom: '1rem' }}>
+                        <label htmlFor="isLongTermEvent" className={classes.formLabel}>Is long term event?</label>
                         <input
-                            type="date"
-                            id="event_first_date"
-                            name="event_first_date"
-                            className={classes.formInput}
-                            value={formData.event_first_date}
-                            onChange={handleChange}
-                            required
+                            type="checkbox"
+                            id="isLongTermEvent"
+                            name="isLongTermEvent"
+                            className={classes.checkboxInput}
+                            checked={isLongTermEvent}
+                            onChange={(e) => setIsLongTermEvent(e.target.checked)}
                         />
-                        {errors.event_first_date && <p className={classes.errorText}>{errors.event_first_date}</p>}
                     </div>
-                    <div className={classes.formGroup}>
-                        <label htmlFor="event_last_date" className={classes.formLabel}>End Date:</label>
-                        <input
-                            type="date"
-                            id="event_last_date"
-                            name="event_last_date"
-                            className={classes.formInput}
-                            value={formData.event_last_date}
-                            onChange={handleChange}
-                            required
-                        />
-                        {errors.event_last_date && <p className={classes.errorText}>{errors.event_last_date}</p>}
-                    </div>
-                    <div className={classes.formGroup}>
-                        <label htmlFor="event_type_created_by" className={classes.formLabel}>Created By:</label>
-                        <select
-                            id="event_type_created_by"
-                            name="event_type_created_by"
-                            className={classes.formSelect}
-                            value={formData.event_type_created_by}
-                            onChange={handleChange}
-                            required
-                        >
-                            <option value="">Select a creator</option>
-                            {users.map(user => (
-                                <option key={user.user_guid} value={user.user_guid}>
-                                    {user.first_name} {user.last_name}
-                                </option>
-                            ))}
-                        </select>
-                        {errors.event_type_created_by && <p className={classes.errorText}>{errors.event_type_created_by}</p>}
-                    </div>
+                    {!isLongTermEvent && (
+                        <>
+                            <div className={classes.formGroup}>
+                                <label htmlFor="event_first_date" className={classes.formLabel}>Start Date:</label>
+                                <input
+                                    type="date"
+                                    id="event_first_date"
+                                    name="event_first_date"
+                                    className={classes.formInput}
+                                    value={formData.event_first_date}
+                                    onChange={handleChange}
+                                    required={!isLongTermEvent}
+                                />
+                                {errors.event_first_date && <p className={classes.errorText}>{errors.event_first_date}</p>}
+                            </div>
+                            <div className={classes.formGroup}>
+                                <label htmlFor="event_last_date" className={classes.formLabel}>End Date:</label>
+                                <input
+                                    type="date"
+                                    id="event_last_date"
+                                    name="event_last_date"
+                                    className={classes.formInput}
+                                    value={formData.event_last_date}
+                                    onChange={handleChange}
+                                    required={!isLongTermEvent}
+                                />
+                                {errors.event_last_date && <p className={classes.errorText}>{errors.event_last_date}</p>}
+                            </div>
+                        </>
+                    )}
                     <div className={classes.checkboxGroup}>
                         <label htmlFor="is_active" className={classes.formLabel}>Is Active:</label>
                         <input

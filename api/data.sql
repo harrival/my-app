@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS users_table (
     address VARCHAR(255),
     permission_group VARCHAR(20) DEFAULT 'Customer',
     is_admin BOOLEAN DEFAULT false,
+    business VARCHAR(100),
     time_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -29,6 +30,7 @@ CREATE TABLE IF NOT EXISTS events_table (
     event_type_created_by VARCHAR(50),
     time_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     time_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    business VARCHAR(100),
     FOREIGN KEY (event_type_created_by) REFERENCES users_table(user_guid)
 );
 
@@ -40,6 +42,7 @@ CREATE TABLE IF NOT EXISTS puzzles_type (
     puzzle_type_created_by VARCHAR(50),
     time_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     time_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    business VARCHAR(100),
     FOREIGN KEY (puzzle_type_created_by) REFERENCES users_table(user_guid)
 );
 
@@ -49,6 +52,7 @@ CREATE TABLE IF NOT EXISTS reps_table (
     rep VARCHAR(50),
     event_id VARCHAR(50),
     is_active BOOLEAN,
+    business VARCHAR(100),
     FOREIGN KEY (rep) REFERENCES users_table(user_guid),
     FOREIGN KEY (event_id) REFERENCES events_table(event_guid)
 );
@@ -71,6 +75,7 @@ CREATE TABLE IF NOT EXISTS game_players_table (
     rep_id VARCHAR(50),
     event_id VARCHAR(50),
     played_date DATE,
+    business VARCHAR(100),
     FOREIGN KEY (rep_id) REFERENCES reps_table(rep_guid),
     FOREIGN KEY (event_id) REFERENCES events_table(event_guid)
 );
@@ -79,6 +84,7 @@ CREATE TABLE IF NOT EXISTS que_number_table (
     id SERIAL,
     last_number INTEGER,
     event_id VARCHAR(50),
+    business VARCHAR(100),
     FOREIGN KEY (event_id) REFERENCES events_table(event_guid)
 );
 

@@ -5,12 +5,14 @@ import classes from '../Styles/Events.module.css'; // Import CSS module
 import AddEventForm from '../../UI/Form/AddEventForm';
 import EditEventForm from '../../UI/Form/EditEventForm';
 import { EventType } from "./EventInterface";
+import { useUserProfile } from '../../shared/Context/UserProfileContext';
 
 interface EventsProps {
     onBack?: () => void;
 }
 
 const Events: React.FC<EventsProps> = ({ onBack }) => {
+    const { profile } = useUserProfile();
     const [events, setEvents] = useState<EventType[]>([]);
     const [selectedEvent, setSelectedEvent] = useState<EventType | null>(null);
     const [showEditEventForm, setShowEditEventForm] = useState<boolean>(false);
@@ -21,8 +23,9 @@ const Events: React.FC<EventsProps> = ({ onBack }) => {
         const fetchEvents = async () => {
             try {
                 const response = await axios.get(`${BASE_URL}/getAll`, {
-                    params: { 
+                    params: {
                         tableName: "events_table",
+                        business: profile?.business,
                         orderBy: 'event_first_date',
                         sortDir: 'DESC'
                     }
@@ -73,7 +76,7 @@ const Events: React.FC<EventsProps> = ({ onBack }) => {
                     <button className={classes.actionButton} onClick={() => setShowAddEvent(true)}>Add Event</button>
                 </div>
             </div>
-            
+
             {showAddEvent && <AddEventForm onClose={handleCloseAddEventForm} onSuccess={handleCloseAddEventForm} />}
             {showEditEventForm && selectedEvent && <EditEventForm event={selectedEvent} onClose={handleCloseEditEventForm} onSuccess={handleCloseEditEventForm} />}
 
@@ -93,18 +96,22 @@ const Events: React.FC<EventsProps> = ({ onBack }) => {
                         <tr key={event.event_guid}>
                             <td className={classes.tableTd} style={{ textAlign: "center" }}>{event.event_type}</td>
                             <td className={classes.tableTd} style={{ textAlign: "center" }}>{event.event_location}</td>
-                            <td className={classes.tableTd} style={{ textAlign: "center" }}>{new Date(event.event_first_date).toLocaleDateString()}</td>
-                            <td className={classes.tableTd} style={{ textAlign: "center" }}>{new Date(event.event_last_date).toLocaleDateString()}</td>
+                            <td className={classes.tableTd} style={{ textAlign: "center" }}>
+                                {event.event_first_date ? new Date(event.event_first_date).toLocaleDateString() : 'N/A'}
+                            </td>
+                            <td className={classes.tableTd} style={{ textAlign: "center" }}>
+                                {event.event_last_date ? new Date(event.event_last_date).toLocaleDateString() : 'N/A'}
+                            </td>
                             <td className={classes.tableTd} style={{ textAlign: "center" }}>{event.is_active ? "Yes" : "No"}</td>
                             <td className={`${classes.tableTd} ${classes.tableTdCenter}`}>
-                                <button 
-                                    className={`${classes.actionButton} ${classes.editButton}`} 
+                                <button
+                                    className={`${classes.actionButton} ${classes.editButton}`}
                                     onClick={() => handleEditEvent(event)}
                                 >
                                     Edit
                                 </button>
-                                <button 
-                                    className={classes.actionButton} 
+                                <button
+                                    className={classes.actionButton}
                                     onClick={() => handleDeleteEvent(event.event_guid)}
                                 >
                                     Delete

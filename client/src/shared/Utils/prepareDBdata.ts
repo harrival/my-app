@@ -1,4 +1,4 @@
-import {type RepsTypes} from '../../GamePlayers/Components/RepsInterface';
+import { type RepsTypes } from '../../GamePlayers/Components/RepsInterface';
 
 interface RawRepsData {
     rep_guid: string;
@@ -9,6 +9,7 @@ interface RawRepsData {
     event_last_date: string;
     event_location: string;
     event_type: string;
+    business: string;
 }
 
 interface RawCustomersData {
@@ -39,7 +40,8 @@ export const prepareRepsData = (data: RawRepsData[]): RepsTypes[] => {
         EventFirstDate: new Date(item.event_first_date),
         EventLastDate: new Date(item.event_last_date),
         EventLocation: item.event_location,
-        EventType: item.event_type
+        EventType: item.event_type,
+        Business: item.business
     }));
 };
 

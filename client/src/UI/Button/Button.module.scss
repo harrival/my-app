@@ -27,12 +27,30 @@
     background-color: #9255d3;
 }
 
+.button.inverse {
+    background-color: transparent;
+    color: #613293;
+    border: 3px solid #613293;
+}
+
+.button.inverse:hover,
+.button.inverse:active {
+    background-color: #613293;
+    color: white;
+}
+
 .deleteButton:disabled,
 .button:disabled {
     background-color: var(--disabled-background);
     border: var(--border-disabled);
     color: var(--text-disabled);
     cursor: default;
+}
+
+.button.inverse:disabled {
+    background-color: transparent;
+    color: var(--text-disabled);
+    border-color: var(--border-disabled);
 }
 
 .icon {

@@ -7,11 +7,16 @@ interface ButtonProps {
     onClick?: () => void;
     disabled?: boolean;
     children: ReactNode;
+    inverse?: boolean;
 }
 
-const Button = ({ type = 'button', onClick, disabled, children }: ButtonProps) => {
+const Button = ({ type = 'button', onClick, disabled, children, inverse }: ButtonProps) => {
     // Swap out styles for if it is a delete button or regular button
-    const classAlt = type === 'delete' ? classes.deleteButton : classes.button;
+    let classAlt = type === 'delete' ? classes.deleteButton : classes.button;
+
+    if (inverse) {
+        classAlt = `${classAlt} ${classes.inverse}`;
+    }
 
     return (
         <button

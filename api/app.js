@@ -107,6 +107,24 @@ setupDbListener().catch((err) => {
   // without real-time DB notifications.
 });
 
+// Database Migrations (Run on startup)
+const migrateDb = async () => {
+  try {
+    await db.query(`
+      ALTER TABLE users_table ADD COLUMN IF NOT EXISTS business VARCHAR(100);
+      ALTER TABLE events_table ADD COLUMN IF NOT EXISTS business VARCHAR(100);
+      ALTER TABLE puzzles_type ADD COLUMN IF NOT EXISTS business VARCHAR(100);
+      ALTER TABLE reps_table ADD COLUMN IF NOT EXISTS business VARCHAR(100);
+      ALTER TABLE game_players_table ADD COLUMN IF NOT EXISTS business VARCHAR(100);
+      ALTER TABLE que_number_table ADD COLUMN IF NOT EXISTS business VARCHAR(100);
+    `);
+    console.log("✅ DB Migrations completed successfully (business columns ensured).");
+  } catch (err) {
+    console.error("❌ DB Migrations failed:", err);
+  }
+};
+migrateDb();
+
 // IMPORTANT: Use server.listen, not app.listen
 const PORT = process.env.PORT || 5001;
 server.listen(PORT, '0.0.0.0', () => {

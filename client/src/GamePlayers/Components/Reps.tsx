@@ -6,12 +6,15 @@ import { BASE_URL } from '../../shared/Utils/apiConfig';
 import classes from '../Styles/Reps.module.css'; // Import CSS module
 import AddRepForm from "../../UI/Form/AddRepForm"; // Assuming this form will also use Form.module.css or its own
 import EditRepForm from "../../UI/Form/EditRepForm";
+import { useUserProfile } from '../../shared/Context/UserProfileContext';
 
 interface RepsProps {
     onBack?: () => void;
 }
 
 const Reps: React.FC<RepsProps> = ({ onBack }) => {
+    const { profile, user } = useUserProfile();
+    console.log("👤 [Reps] Logged in user profile:", profile);
     const [repsTable, setRepsTable] = useState<RepsTypes[]>([]);
     const [refreshTrigger, setRefreshTrigger] = useState<number>(0); // Local state to trigger re-fetch
     const [showAddRep, setShowAddRep] = useState<boolean>(false);
@@ -21,7 +24,8 @@ const Reps: React.FC<RepsProps> = ({ onBack }) => {
     useEffect(() => {
         const fetchUsers = async () => {
             const dbObject = {
-                tableName: "reptable"
+                tableName: "reptable",
+                business: profile?.business
             };
             try { // Note: Your /reps endpoint is not a generic /getAll, it has a join.
                 const response = await axios.get(`${BASE_URL}/reps`, { params: dbObject });
@@ -72,7 +76,7 @@ const Reps: React.FC<RepsProps> = ({ onBack }) => {
                     <button className={classes.actionButton} onClick={() => setShowAddRep(true)}>Add Representative</button>
                 </div>
             </div>
-            
+
             {showAddRep && <AddRepForm setShowAddRep={handleCloseAddRepForm} />}
             {showEditRep && selectedRep && (
                 <EditRepForm rep={selectedRep} onClose={handleCloseEditRepForm} onSuccess={handleCloseEditRepForm} />

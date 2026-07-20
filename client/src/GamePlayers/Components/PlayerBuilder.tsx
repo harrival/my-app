@@ -6,10 +6,12 @@ import PlayerPuzzleForm from '../../UI/Form/PlayerPuzzleForm';
 import EditPuzzleForm from '../../UI/Form/EditPuzzleForm';
 import axios from 'axios';
 import { useRefresh } from '../../shared/Context/RefreshContext';
-import {type Player} from './PlayerInterface';
+import { type Player } from './PlayerInterface';
 import { BASE_URL } from '../../shared/Utils/apiConfig';
+import { useUserProfile } from '../../shared/Context/UserProfileContext';
 
 const PlayerBuilder: React.FC = () => {
+  const { profile } = useUserProfile();
   const { refreshKey } = useRefresh();
   const [allPlayers, setAllPlayers] = useState<Player[]>([]);
   const [catPlayers, setCatPlayers] = useState<Player[]>([]);
@@ -17,6 +19,7 @@ const PlayerBuilder: React.FC = () => {
   const [showPuzzleForm, setShowPuzzleForm] = useState<boolean>(false);
   const [showEditPuzzleForm, setShowEditPuzzleForm] = useState<boolean>(false);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+  const [agent, setAgent] = useState<string>('');
 
   useEffect(() => {
     console.log('All players:', allPlayers);
@@ -30,7 +33,25 @@ const PlayerBuilder: React.FC = () => {
   useEffect(() => {
     const fetchUsers = async () => {
       const dbObject = {
-        tableName: "game_players_table"
+        tableName: "reptable",
+        rep: profile?.user_guid
+      };
+      try { // Note: Your /reps endpoint is not a generic /getAll, it has a join.
+        const response = await axios.get(`${BASE_URL}/reps`, { params: dbObject });
+        setAgent(response.data[0].user_guid);
+
+      } catch (error) {
+        console.error('Error fetching users:', error);
+      }
+    };
+    fetchUsers();
+  }, []);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      const dbObject = {
+        tableName: "game_players_table",
+        rep_id: agent
       };
       try {
         console.log('request from timer')
@@ -42,7 +63,7 @@ const PlayerBuilder: React.FC = () => {
     };
 
     fetchUsers();
-  }, [refreshKey]); // Now updates automatically when any view changes the DB
+  }, [refreshKey, agent]); // Now updates automatically when any view changes the DB
 
   const showPuzzleFormHandler = () => {
     setShowPuzzleForm(!showPuzzleForm);

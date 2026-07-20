@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import classes from '../../GamePlayers/Styles/Form.module.css';
 import axios from 'axios';
 import { BASE_URL } from '../../shared/Utils/apiConfig';
 import { UserType } from '../../GamePlayers/Components/UserInterface'; // Import UserType
+import { useUserProfile } from '../../shared/Context/UserProfileContext';
 
 interface AddUserFormProps {
     onClose: () => void;
@@ -10,6 +11,8 @@ interface AddUserFormProps {
 }
 
 const AddUserForm: React.FC<AddUserFormProps> = ({ onClose, onSuccess }) => {
+    const { profile } = useUserProfile();
+
     const [errors, setErrors] = useState({
         first_name: '',
         last_name: '',
@@ -17,14 +20,24 @@ const AddUserForm: React.FC<AddUserFormProps> = ({ onClose, onSuccess }) => {
         phone_number: '',
     });
 
-    const [formData, setFormData] = useState<Omit<UserType, 'id' | 'user_guid' | 'is_admin' | 'time_created'>>({
+    const [formData, setFormData] = useState<Omit<UserType, 'id' | 'user_guid' | 'is_admin' | 'time_created'> & { business?: string }>({
         first_name: '',
         last_name: '',
         email: '',
         phone_number: '',
         address: '',
-        permission_group: 'user',
+        permission_group: 'agent',
+        business: '',
     });
+
+    const isSupervisor = profile?.permission_group?.toLowerCase() === 'supervisor';
+
+    useEffect(() => {
+        if (isSupervisor) {
+            const userBusiness = profile?.business || profile?.business_value || '';
+            setFormData(prev => ({ ...prev, business: userBusiness, permission_group: 'agent' }));
+        }
+    }, [isSupervisor, profile]);
 
     const validateUniqueEmail = async (email: string): Promise<string> => {
         try {
@@ -51,7 +64,7 @@ const AddUserForm: React.FC<AddUserFormProps> = ({ onClose, onSuccess }) => {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         const newErrors = {
             first_name: !formData.first_name ? 'First name is required' : '',
             last_name: !formData.last_name ? 'Last name is required' : '',
@@ -168,10 +181,24 @@ const AddUserForm: React.FC<AddUserFormProps> = ({ onClose, onSuccess }) => {
                             className={classes.formSelect}
                             value={formData.permission_group}
                             onChange={handleChange}
+                            disabled={isSupervisor}
                         >
-                            <option value="user">User</option>
-                            <option value="admin">Admin</option>
+                            <option value="Admin">Admin</option>
+                            <option value="Supervisor">Supervisor</option>
+                            <option value="Agent">Agent</option>
                         </select>
+                    </div>
+                    <div className={classes.formGroup}>
+                        <label htmlFor="business" className={classes.formLabel}>Business:</label>
+                        <input
+                            type="text"
+                            id="business"
+                            name="business"
+                            className={classes.formInput}
+                            value={formData.business || ''}
+                            onChange={handleChange}
+                            disabled={isSupervisor}
+                        />
                     </div>
                     <div className={classes.buttonContainer}>
                         <button type="submit" className={`${classes.formButton} ${classes.primary}`}>Add User</button>

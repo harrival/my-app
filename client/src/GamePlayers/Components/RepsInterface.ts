@@ -7,6 +7,7 @@ interface RepsTypes {
     EventLastDate: Date;
     EventLocation: string;
     EventType: string;
+    Business: string;
 }
 
 

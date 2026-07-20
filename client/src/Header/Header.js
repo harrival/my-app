@@ -1,47 +1,72 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import maze from '../assets/maze.jpeg';
 import classes from './Header.module.scss';
-import Button from '../UI/Button/Button'
 import SideDrawer from './SideDrawer';
-import HoverMenuButton from './HoverMenuButton.js'
+import { AuthContext } from '../shared/Context/auth-context';
+import { useUserProfile } from '../shared/Context/UserProfileContext';
+import axios from 'axios';
+import { BASE_URL } from '../shared/Utils/apiConfig';
 
 const Header = (props) => {
-    // auth is now an object that will hold the isLoggedIn, login, logout
-    // const auth = useContext(AuthContext);
-    const auth = true
+    const auth = useContext(AuthContext);
+    const { user, profile, setProfile, setUser } = useUserProfile();
     let navigate = useNavigate();
+    console.log("Header renders. auth.isLoggedIn =", auth.isLoggedIn);
+    console.log("👤 [Header] Logged in user property:", user);
+
+    const business = profile?.business || "non_business";
+    const permissionGroup = profile?.permission_group || null;
+
+    const logoutHandler = async () => {
+        try {
+            const sessionStr = localStorage.getItem('userSession');
+            if (sessionStr) {
+                const session = JSON.parse(sessionStr);
+                if (session.userGuid) {
+                    await axios.post(`${BASE_URL}/profile/${session.userGuid}`, {});
+                }
+            }
+        } catch (err) {
+            console.error('Error clearing profile on server:', err);
+        }
+        setProfile(null);
+        auth.logout();
+        navigate('/Auth', { replace: true });
+    };
 
     // the Drawer is for small screens and mobile views
     const [drawerOpen, setDrawerOpen] = useState(false);
 
     const navLinks =
         <div className={classes.navLinks}>
-            {auth &&
+            {auth.isLoggedIn &&
                 <>
                     <NavLink
-                        to="/"
+                        to={`/${business}`}
                         className={classes.link}
                         onClick={() => props.setColor("#ebe3ff")}>Home
                     </NavLink>
 
                     <NavLink
-                        to="/PlayerBuilder"
+                        to={`/${business}/PlayerBuilder`}
                         className={classes.link}
                         onClick={() => props.setColor("#e7ffe3")}>Play Ground
                     </NavLink>
 
                     <NavLink
-                        to="/Reps"
+                        to={`/${business}/Reps`}
                         className={classes.link}
                         onClick={() => props.setColor("#e7ffe3")}>Reps
                     </NavLink>
 
-                    <NavLink
-                        to="/Admin"
-                        className={classes.link}
-                        onClick={() => props.setColor("#fdfae1")}>Admin
-                    </NavLink>
+                    {permissionGroup !== 'Agent' && (
+                        <NavLink
+                            to={`/${business}/Admin`}
+                            className={classes.link}
+                            onClick={() => props.setColor("#fdfae1")}>Admin
+                        </NavLink>
+                    )}
                 </>
             }
         </div>
@@ -80,13 +105,24 @@ const Header = (props) => {
                 {/* {auth.isLoggedIn && <Button onClick={logoutHandler}><FaUserCircle /> Logout</Button>} */}
 
                 <div className={classes.loggedInButtons}>
-                    {auth.isLoggedIn && <Button onClick={props.onShowModal}>Add Expense</Button>}
-                    {auth && <div className={classes.hoverMenu}>
-                        <span>Profile</span>
-                        <div className={classes.subMenu}>
-                            <HoverMenuButton props={props} />
-                        </div>
-                    </div>}
+                    {!auth.isLoggedIn ? (
+                        <NavLink to="/Auth" className={classes.link} style={{ fontWeight: 'bold', textDecoration: 'none' }}>
+                            Sign in
+                        </NavLink>
+                    ) : (
+                        <>
+                            <NavLink to={`/${business}/Profile`} className={classes.link} style={{ marginRight: '15px', fontWeight: 'bold', textDecoration: 'none' }}>
+                                Profile
+                            </NavLink>
+                            <span
+                                onClick={logoutHandler}
+                                className={classes.link}
+                                style={{ fontWeight: 'bold', textDecoration: 'none', cursor: 'pointer' }}
+                            >
+                                Sign out
+                            </span>
+                        </>
+                    )}
                 </div>
             </header>
 

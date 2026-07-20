@@ -33,7 +33,7 @@ const Admin: React.FC = () => {
                     type="button"
                     onClick={() => setActiveTable('users')}
                 >
-                    Users
+                    Users...
                 </button>
                 <button 
                     className={classes.adminButton} 

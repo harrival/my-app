@@ -4,28 +4,31 @@ import Card from '../../UI/Card/Card';
 import InProgressPlayers from './InProgressPlayers';
 import { type Player } from './PlayerInterface';
 import { BASE_URL } from '../../shared/Utils/apiConfig';
+import { useUserProfile } from '../../shared/Context/UserProfileContext';
 import classes from '../Styles/PlayerBuilder.module.scss';
 
 const CatPlayersDisplay: React.FC = () => {
+  const { user, profile } = useUserProfile();
+  console.log("👤 [CatPlayersDisplay] Logged in user property:", user);
   const [players, setPlayers] = useState<Player[]>([]);
   const [isPlayInProgress, setIsPlayInProgress] = useState<boolean>(false);
 
   const fetchPlayers = useCallback(async () => {
     try {
       const response = await axios.get<Player[]>(`${BASE_URL}/getAll/`, {
-        params: { 
-          tableName: "game_players_table", 
-          puzzle_type: 'CAT', 
+        params: {
+          tableName: "game_players_table",
+          puzzle_type: 'CAT',
           game_status: ['Created', 'In_progress'],
-          limit: 20 
+          limit: 20
         }
       });
       // Results are now filtered by the backend, we just sort them for display
       const cats = response.data
         .sort((a, b) => {
-            if (a.game_status === 'In_progress') return -1;
-            if (b.game_status === 'In_progress') return 1;
-            return 0;
+          if (a.game_status === 'In_progress') return -1;
+          if (b.game_status === 'In_progress') return 1;
+          return 0;
         });
       setPlayers(cats);
     } catch (error) {
@@ -79,8 +82,8 @@ const CatPlayersDisplay: React.FC = () => {
                 index === 0 && isPlayInProgress
                   ? classes.inProgressPlayer
                   : index === 0 || (index === 1 && isPlayInProgress)
-                  ? classes.nextPlayer
-                  : ""
+                    ? classes.nextPlayer
+                    : ""
               }
             >
               <td>
@@ -95,5 +98,5 @@ const CatPlayersDisplay: React.FC = () => {
   );
 };
 
-export {};
+export { };
 export default CatPlayersDisplay;

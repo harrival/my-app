@@ -4,18 +4,45 @@ const db = require("../db");
 const express = require("express");
 const router = express.Router();
 
+const SCOPED_TABLES = [
+  'events_table',
+  'game_players_table',
+  'puzzles_type',
+  'que_number_table',
+  'reps_table',
+  'users_table'
+];
+
+function isScopedTable(tableName) {
+  if (!tableName) return false;
+  const lower = tableName.toLowerCase();
+  return SCOPED_TABLES.includes(lower) ||
+    lower === 'event_table' ||
+    lower === 'puzzle_type';
+}
+
 /** Get users: [user, user, user] */
 
 /** Get all users */
 router.get("/reps", async function (req, res, next) {
   try {
-    const query = `
+    const userRole = req.headers['x-user-role'];
+    const userBusiness = req.headers['x-user-business'];
+
+    let query = `
       SELECT rp.is_active, rp.rep_guid, ct.first_name, ct.last_name, et.event_type, et.event_location, et.event_first_date, et.event_last_date
       FROM reps_table rp
       INNER JOIN users_table ct ON rp.rep = ct.user_guid
       INNER JOIN events_table et ON rp.event_id = et.event_guid
     `;
-    const results = await db.query(query);
+    const queryParams = [];
+
+    if (userRole === 'Supervisor' && userBusiness) {
+      query += ` WHERE rp.business = $1`;
+      queryParams.push(userBusiness);
+    }
+
+    const results = await db.query(query, queryParams);
     return res.json(results.rows);
   } catch (err) {
     return next(err);
@@ -25,9 +52,10 @@ router.get("/reps", async function (req, res, next) {
 /** Get items from a table with dynamic filters and limit */
 router.get("/getAll", async function (req, res, next) {
   const { tableName, limit = 20, orderBy, sortDir, ...filters } = req.query;
-   // Security: Validate sort direction
+  // Security: Validate sort direction
   const direction = (sortDir || '').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
   try {
+
     let query = `SELECT * FROM ${tableName}`;
     const queryParams = [];
     const filterKeys = Object.keys(filters);
@@ -66,6 +94,13 @@ router.get("/getOne", async function (req, res, next) {
       return res.status(400).json({ error: "tableName is required" });
     }
 
+    const userRole = req.headers['x-user-role'];
+    const userBusiness = req.headers['x-user-business'];
+
+    if (userRole === 'Supervisor' && isScopedTable(tableName) && userBusiness) {
+      filters.business = userBusiness;
+    }
+
     let query = `SELECT * FROM ${tableName}`;
     const queryParams = [];
     const filterKeys = Object.keys(filters);
@@ -99,12 +134,25 @@ router.get("/completedPlayers", async function (req, res, next) {
   const direction = (sortDir || '').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
   try {
-    const results = await db.query(
-      `SELECT player_guid, username, time_used, time_used_in_sec, puzzle_type, time_modified 
-       FROM game_players_table 
-       WHERE game_status = $1 AND DATE(time_created) = CURRENT_DATE 
-       ORDER BY ${sortColumn} ${direction}
-       LIMIT $2`, ['Completed', limit]);
+    const userRole = req.headers['x-user-role'];
+    const userBusiness = req.headers['x-user-business'];
+
+    let query = `
+      SELECT player_guid, username, time_used, time_used_in_sec, puzzle_type, time_modified 
+      FROM game_players_table 
+      WHERE game_status = $1 AND DATE(time_created) = CURRENT_DATE
+    `;
+    const queryParams = ['Completed'];
+
+    if (userRole === 'Supervisor' && userBusiness) {
+      query += ` AND business = $2`;
+      queryParams.push(userBusiness);
+    }
+
+    query += ` ORDER BY ${sortColumn} ${direction} LIMIT $${queryParams.length + 1}`;
+    queryParams.push(limit);
+
+    const results = await db.query(query, queryParams);
 
     if (!results.rows || results.rows.length === 0) {
       return res.status(404).json({ error: "No completed players found" });
@@ -119,10 +167,7 @@ router.get("/completedPlayers", async function (req, res, next) {
 
 router.get("/", async function (req, res, next) {
   try {
-    const results = await db.query(
-          `SELECT id, name, type FROM users`);
-      debugger
-    return res.json(results.rows);
+    return res.json({ status: "ok", message: "API is running" });
   }
 
   catch (err) {
@@ -134,16 +179,16 @@ router.get("/", async function (req, res, next) {
 // this version has security holes --- you could inject SQL
 // because the input isn't sanitized!
 
-/** Search by user type. */
+/** Search by user permission group. */
 
 router.get("/search", async function (req, res, next) {
   try {
-    const type = req.query.type;
-    
+    const group = req.query.group;
+
     const results = await db.query(
-      `SELECT id, name, type 
-       FROM users
-       WHERE type='${type}'`);
+      `SELECT id, user_guid, first_name, last_name, permission_group 
+       FROM users_table
+       WHERE permission_group='${group}'`);
 
     return res.json(results.rows);
   }
@@ -192,6 +237,12 @@ router.post("/addToTable", async function (req, res, next) {
 
     if (!tableName || !fields || typeof fields !== 'object') {
       return res.status(400).json({ error: "Invalid input data" });
+    }
+
+    const userRole = req.headers['x-user-role'];
+    const userBusiness = req.headers['x-user-business'];
+    if (userRole === 'Supervisor' && isScopedTable(tableName) && userBusiness) {
+      fields.business = userBusiness;
     }
 
     const fieldNames = Object.keys(fields).join(", ");
@@ -245,10 +296,10 @@ router.patch("/editPlayerForm/:id", async function (req, res, next) {
   try {
     const { id } = req.params;
     // Default to player table settings if not provided
-    const { 
-      tableName = "game_players_table", 
-      idColumn = "player_guid", 
-      ...fields 
+    const {
+      tableName = "game_players_table",
+      idColumn = "player_guid",
+      ...fields
     } = req.body;
 
     const queryParams = [];
@@ -290,18 +341,91 @@ router.patch("/editPlayerForm/:id", async function (req, res, next) {
 router.delete("/deletePlayer/:id", async function (req, res, next) {
   try {
     const result = await db.query(
-        "DELETE FROM game_players_table WHERE player_guid = $1",
-        [req.params.id]
+      "DELETE FROM game_players_table WHERE player_guid = $1",
+      [req.params.id]
     );
 
-    return res.json({message: "Deleted"});
+    return res.json({ message: "Deleted" });
   }
 
   catch (err) {
     return next(err);
   }
 });
-// end
+const userProfiles = {};
 
+router.post("/profile/:user_guid", function (req, res, next) {
+  try {
+    const { user_guid } = req.params;
+    const profile = req.body;
+    if (!profile || Object.keys(profile).length === 0) {
+      delete userProfiles[user_guid];
+      console.log(`❌ Cleared profile for user_guid: ${user_guid}. Active profiles:`, Object.keys(userProfiles));
+      return res.json({ success: true, profile: null });
+    }
+
+    // Use the value of business from the returned user object
+    const businessValue = profile.business || "Standard Customer";
+    profile.business_value = businessValue;
+
+    userProfiles[user_guid] = profile;
+    console.log(`💾 Storing profile for user_guid: ${user_guid}. Current userProfiles keys:`, Object.keys(userProfiles));
+    console.log("👤 Full profile contents:", JSON.stringify(profile, null, 2));
+
+    return res.json({ success: true, profile: userProfiles[user_guid] });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+router.get("/profile/:user_guid", async function (req, res, next) {
+  try {
+    const { user_guid } = req.params;
+    if (userProfiles[user_guid]) {
+      console.log(`🔍 GET /profile/${user_guid} (from memory) - Returning:`, userProfiles[user_guid]);
+      return res.json(userProfiles[user_guid]);
+    }
+
+    // Fallback: fetch from database and restore cache
+    console.log(`🔍 GET /profile/${user_guid} not in memory, querying database...`);
+    const result = await db.query(
+      "SELECT * FROM users_table WHERE user_guid = $1",
+      [user_guid]
+    );
+
+    if (result.rows.length > 0) {
+      const profile = result.rows[0];
+      const businessValue = profile.business || "Standard Customer";
+      profile.business_value = businessValue;
+      userProfiles[user_guid] = profile;
+
+      console.log(`💾 Restored profile from DB for user_guid: ${user_guid}`);
+      return res.json(profile);
+    }
+
+    console.log(`🔍 GET /profile/${user_guid} - Not found in memory or database.`);
+    return res.json(null);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+router.get("/active-profile/:business", function (req, res, next) {
+  try {
+    const { business } = req.params;
+    // Find an active profile in userProfiles matching the business (case-insensitive)
+    const activeUser = Object.values(userProfiles).find(
+      (profile) => profile.business && profile.business.toLowerCase() === business.toLowerCase()
+    );
+    if (activeUser) {
+      console.log(`🔍 GET /active-profile/${business} - Found active session for user_guid: ${activeUser.user_guid}`);
+      return res.json(activeUser);
+    }
+    console.log(`🔍 GET /active-profile/${business} - No active session found.`);
+    return res.json(null);
+  } catch (err) {
+    return next(err);
+  }
+});
 
 module.exports = router;
