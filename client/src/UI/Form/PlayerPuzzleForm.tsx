@@ -4,8 +4,6 @@ import { BASE_URL } from '../../shared/Utils/apiConfig';
 import './PuzzleForm.css';
 import { type Player } from '../../GamePlayers/Components/PlayerInterface';
 
-const representativeID = 'GUID10001';
-const eventID = 'GUID2000';
 const time_used = "00:00:00";
 const time_modified = null;
 
@@ -13,6 +11,8 @@ const time_modified = null;
 interface PuzzleFormProps {
   setShowPuzzleForm: (value: boolean) => void;
   setAllPlayers: React.Dispatch<React.SetStateAction<Player[]>>;
+  agentGuid: string;
+  currentEvent: string;
 }
 
 // Define types for form state
@@ -29,7 +29,7 @@ interface FormErrors {
   puzzlePet: string;
 }
 
-const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers }: PuzzleFormProps) => {
+const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers, agentGuid, currentEvent }: PuzzleFormProps) => {
   const [formState, setFormState] = useState<FormState>({
     contact: '',
     username: '',
@@ -109,7 +109,7 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers }: PuzzleFormProps)
 
     setErrors({
       contact: contactError,
-      username: usernameError, 
+      username: usernameError,
       puzzlePet: puzzlePetError,
     });
 
@@ -152,19 +152,19 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers }: PuzzleFormProps)
         time_started: '00:00:00',
         time_ended: '00:00:00',
         time_used: '00:00:00',
-        played_date: null,
+        played_date: new Date().toISOString().split('T')[0],
         player_que_number: assignedQueNumber,
         time_created: new Date().toISOString(),
         time_modified,
-        rep_id: representativeID,
-        event_id: eventID,
+        rep_id: agentGuid,
+        event_id: currentEvent,
       };
       try {
         const { id, ...newPlayerWithoutId } = newPlayer;
         const dbObject = {
-                tableName: "game_players_table",
-                fields: newPlayerWithoutId
-            }
+          tableName: "game_players_table",
+          fields: newPlayerWithoutId
+        }
 
         const response = await axios.post(`${BASE_URL}/addToTable`, dbObject);
         if (response.status === 201) {

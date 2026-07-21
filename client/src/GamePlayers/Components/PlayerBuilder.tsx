@@ -20,6 +20,7 @@ const PlayerBuilder: React.FC = () => {
   const [showEditPuzzleForm, setShowEditPuzzleForm] = useState<boolean>(false);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [agent, setAgent] = useState<string>('');
+  const [currentEvent, setCurrentEvent] = useState<string>('');
 
   useEffect(() => {
     console.log('All players:', allPlayers);
@@ -33,13 +34,13 @@ const PlayerBuilder: React.FC = () => {
   useEffect(() => {
     const fetchUsers = async () => {
       const dbObject = {
-        tableName: "reptable",
+        tableName: "reps_table",
         rep: profile?.user_guid
       };
       try { // Note: Your /reps endpoint is not a generic /getAll, it has a join.
-        const response = await axios.get(`${BASE_URL}/reps`, { params: dbObject });
-        setAgent(response.data[0].user_guid);
-
+        const response = await axios.get(`${BASE_URL}/getOne`, { params: dbObject });
+        setAgent(response.data.rep_guid);
+        setCurrentEvent(response.data.event_id);
       } catch (error) {
         console.error('Error fetching users:', error);
       }
@@ -51,10 +52,11 @@ const PlayerBuilder: React.FC = () => {
     const fetchUsers = async () => {
       const dbObject = {
         tableName: "game_players_table",
-        rep_id: agent
+        rep_id: agent,
+        played_date: new Date().toISOString().split('T')[0],
       };
       try {
-        console.log('request from timer')
+        console.log('request for agent', agent)
         const response = await axios.get<Player[]>(`${BASE_URL}/getAll/`, { params: dbObject });
         setAllPlayers(response.data);
       } catch (error) {
@@ -106,6 +108,8 @@ const PlayerBuilder: React.FC = () => {
           <PlayerPuzzleForm
             setShowPuzzleForm={setShowPuzzleForm}
             setAllPlayers={setAllPlayers}
+            agentGuid={agent}
+            currentEvent={currentEvent}
           />
         </div>
       )}

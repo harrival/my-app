@@ -24,7 +24,7 @@ const Reps: React.FC<RepsProps> = ({ onBack }) => {
     useEffect(() => {
         const fetchUsers = async () => {
             const dbObject = {
-                tableName: "reptable",
+                tableName: "reps_table",
                 business: profile?.business
             };
             try { // Note: Your /reps endpoint is not a generic /getAll, it has a join.

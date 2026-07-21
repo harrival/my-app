@@ -22,11 +22,11 @@ const StopCatTimer: React.FC<StopCatTimerProps> = ({ player }) => {
       try {
         console.log('request from timer');
         const response = await axios.get<Player[]>(`${BASE_URL}/getAll/`, {
-          params: { 
-            tableName: "game_players_table", 
-            puzzle_type: 'CAT', 
+          params: {
+            tableName: "game_players_table",
+            puzzle_type: 'CAT',
             game_status: 'In_progress',
-            limit: 1 
+            limit: 1
           }
         });
         setCatPlayer(response.data);
@@ -40,14 +40,14 @@ const StopCatTimer: React.FC<StopCatTimerProps> = ({ player }) => {
 
   const isGameInProgress = catPlayer[0]?.game_status === 'In_progress';
 
-    const timeFormat = (ms: number) => {
-  if (isNaN(ms) || ms < 0) return "00:00:00";
+  const timeFormat = (ms: number) => {
+    if (isNaN(ms) || ms < 0) return "00:00:00";
 
-  const hrs = Math.floor(ms / 3600000);
-  const mins = Math.floor((ms % 3600000) / 60000);
-  const secs = Math.floor((ms % 60000) / 1000);
+    const hrs = Math.floor(ms / 3600000);
+    const mins = Math.floor((ms % 3600000) / 60000);
+    const secs = Math.floor((ms % 60000) / 1000);
 
-  return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   const stopCatTimer = async () => {
@@ -65,20 +65,20 @@ const StopCatTimer: React.FC<StopCatTimerProps> = ({ player }) => {
     const timeUsed = timeUsedSeconds * 1000;
 
     const editedPlayer = {
-            game_status: 'Completed',
-            username: nowPlaying.username,
-            email: nowPlaying.email,
-            phone_number: nowPlaying.phone_number,
-            puzzle_type: nowPlaying.puzzle_type,
-            time_started: nowPlaying.time_started,
-            time_ended: timeEnded,
-            time_used: timeFormat(timeUsed),
-            time_used_in_sec: timeUsedSeconds,
-            played_date: new Date().toISOString(),
-            time_modified: new Date().toISOString(),
-            rep_id: nowPlaying.rep_id,
-            event_id: nowPlaying.event_id,
-          };
+      game_status: 'Completed',
+      username: nowPlaying.username,
+      email: nowPlaying.email,
+      phone_number: nowPlaying.phone_number,
+      puzzle_type: nowPlaying.puzzle_type,
+      time_started: nowPlaying.time_started,
+      time_ended: timeEnded,
+      time_used: timeFormat(timeUsed),
+      time_used_in_sec: timeUsedSeconds,
+      played_date: new Date().toISOString(),
+      time_modified: new Date().toISOString(),
+      rep_id: nowPlaying.rep_id,
+      event_id: nowPlaying.event_id,
+    };
     try {
       const response = await axios.patch(
         `${BASE_URL}/editPlayerForm/${nowPlaying.player_guid}`,

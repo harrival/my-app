@@ -23,11 +23,11 @@ const StopDogTimer: React.FC<StopDogTimerProps> = ({ player }) => {
       try {
         console.log('request from timer');
         const response = await axios.get<Player[]>(`${BASE_URL}/getAll/`, {
-          params: { 
-            tableName: "game_players_table", 
-            puzzle_type: 'DOG', 
+          params: {
+            tableName: "game_players_table",
+            puzzle_type: 'DOG',
             game_status: 'In_progress',
-            limit: 1 
+            limit: 1
           }
         });
         setDogPlayer(response.data);
@@ -41,22 +41,22 @@ const StopDogTimer: React.FC<StopDogTimerProps> = ({ player }) => {
 
   const isGameInProgress = dogPlayer[0]?.game_status === 'In_progress';
 
-    const timeFormat = (ms: number) => {
-  if (isNaN(ms) || ms < 0) return "00:00:00";
-  
-  const hrs = Math.floor(ms / 3600000);
-  const mins = Math.floor((ms % 3600000) / 60000);
-  const secs = Math.floor((ms % 60000) / 1000);
-  
-  return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-};
+  const timeFormat = (ms: number) => {
+    if (isNaN(ms) || ms < 0) return "00:00:00";
+
+    const hrs = Math.floor(ms / 3600000);
+    const mins = Math.floor((ms % 3600000) / 60000);
+    const secs = Math.floor((ms % 60000) / 1000);
+
+    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
   const stopDogTimer = async () => {
     const nowPlaying = dogPlayer[0];
     if (!isGameInProgress || !nowPlaying) return; // Disable if no game in progress or no player
     console.log(nowPlaying);
     const timeEnded = new Date().toLocaleTimeString('it-IT');
-    
+
     function timeToSeconds(timeStr: string) {
       const [hrs, mins, secs] = timeStr.split(':').map(Number);
       return (hrs * 3600) + (mins * 60) + secs;
@@ -67,20 +67,20 @@ const StopDogTimer: React.FC<StopDogTimerProps> = ({ player }) => {
     console.log(timeUsed);
 
     const editedPlayer = {
-            game_status: 'Completed',
-            username: nowPlaying.username,
-            email: nowPlaying.email,
-            phone_number: nowPlaying.phone_number,
-            puzzle_type: nowPlaying.puzzle_type,
-            time_started: nowPlaying.time_started,
-            time_ended: timeEnded,
-            time_used: timeFormat(timeUsed),
-            time_used_in_sec: timeUsedSeconds,
-            played_date: new Date().toISOString(),
-            time_modified: new Date().toISOString(),
-            rep_id: nowPlaying.rep_id,
-            event_id: nowPlaying.event_id,
-          };
+      game_status: 'Completed',
+      username: nowPlaying.username,
+      email: nowPlaying.email,
+      phone_number: nowPlaying.phone_number,
+      puzzle_type: nowPlaying.puzzle_type,
+      time_started: nowPlaying.time_started,
+      time_ended: timeEnded,
+      time_used: timeFormat(timeUsed),
+      time_used_in_sec: timeUsedSeconds,
+      played_date: new Date().toISOString(),
+      time_modified: new Date().toISOString(),
+      rep_id: nowPlaying.rep_id,
+      event_id: nowPlaying.event_id,
+    };
     try {
       const response = await axios.patch(
         `${BASE_URL}/editPlayerForm/${nowPlaying.player_guid}`,

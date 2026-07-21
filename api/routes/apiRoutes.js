@@ -26,8 +26,6 @@ function isScopedTable(tableName) {
 /** Get all users */
 router.get("/reps", async function (req, res, next) {
   try {
-    const userRole = req.headers['x-user-role'];
-    const userBusiness = req.headers['x-user-business'];
 
     let query = `
       SELECT rp.is_active, rp.rep_guid, ct.first_name, ct.last_name, et.event_type, et.event_location, et.event_first_date, et.event_last_date
@@ -36,11 +34,6 @@ router.get("/reps", async function (req, res, next) {
       INNER JOIN events_table et ON rp.event_id = et.event_guid
     `;
     const queryParams = [];
-
-    if (userRole === 'Supervisor' && userBusiness) {
-      query += ` WHERE rp.business = $1`;
-      queryParams.push(userBusiness);
-    }
 
     const results = await db.query(query, queryParams);
     return res.json(results.rows);
@@ -94,13 +87,6 @@ router.get("/getOne", async function (req, res, next) {
       return res.status(400).json({ error: "tableName is required" });
     }
 
-    const userRole = req.headers['x-user-role'];
-    const userBusiness = req.headers['x-user-business'];
-
-    if (userRole === 'Supervisor' && isScopedTable(tableName) && userBusiness) {
-      filters.business = userBusiness;
-    }
-
     let query = `SELECT * FROM ${tableName}`;
     const queryParams = [];
     const filterKeys = Object.keys(filters);
@@ -134,8 +120,6 @@ router.get("/completedPlayers", async function (req, res, next) {
   const direction = (sortDir || '').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
   try {
-    const userRole = req.headers['x-user-role'];
-    const userBusiness = req.headers['x-user-business'];
 
     let query = `
       SELECT player_guid, username, time_used, time_used_in_sec, puzzle_type, time_modified 
@@ -143,11 +127,6 @@ router.get("/completedPlayers", async function (req, res, next) {
       WHERE game_status = $1 AND DATE(time_created) = CURRENT_DATE
     `;
     const queryParams = ['Completed'];
-
-    if (userRole === 'Supervisor' && userBusiness) {
-      query += ` AND business = $2`;
-      queryParams.push(userBusiness);
-    }
 
     query += ` ORDER BY ${sortColumn} ${direction} LIMIT $${queryParams.length + 1}`;
     queryParams.push(limit);
@@ -237,12 +216,6 @@ router.post("/addToTable", async function (req, res, next) {
 
     if (!tableName || !fields || typeof fields !== 'object') {
       return res.status(400).json({ error: "Invalid input data" });
-    }
-
-    const userRole = req.headers['x-user-role'];
-    const userBusiness = req.headers['x-user-business'];
-    if (userRole === 'Supervisor' && isScopedTable(tableName) && userBusiness) {
-      fields.business = userBusiness;
     }
 
     const fieldNames = Object.keys(fields).join(", ");
