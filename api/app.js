@@ -6,7 +6,6 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const db = require('./db'); // Database client
 const middleware = require("./middleware");
-const userRoutes = require("./userRoutes");
 const ExpressError = require("./expressError");
 
 const app = express();
@@ -15,7 +14,7 @@ const server = http.createServer(app);
 // Initialize Socket.io with robust settings for multi-device testing
 const io = new Server(server, {
   cors: {
-    origin: "*", 
+    origin: "*",
     methods: ["GET", "POST"],
     credentials: true
   },
@@ -29,9 +28,6 @@ app.use(cors({
   credentials: true
 }));
 app.use(middleware.logger);
-
-// Mount userRoutes
-app.use('/players', userRoutes);
 
 // Add routes from appServer.js
 app.get('/favicon.ico', (req, res) => res.sendStatus(204));
@@ -57,13 +53,13 @@ try {
 }
 
 /** 404 handler */
-app.use(function(req, res, next) {
+app.use(function (req, res, next) {
   const err = new ExpressError("Not Found", 404);
   return next(err);
 });
 
 /** general error handler */
-app.use(function(err, req, res, next) {
+app.use(function (err, req, res, next) {
   let status = err.status || 500;
   return res.status(status).json({
     error: {
@@ -79,7 +75,7 @@ const setupDbListener = async () => {
   try {
     client = await db.connect();
     await client.query('LISTEN game_players_changes');
-    
+
     client.on('notification', (msg) => {
       if (msg.channel === 'game_players_changes') {
         console.log("🔔 DB Change detected! Emitting refresh to all TvDisplays.");
