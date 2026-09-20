@@ -53,7 +53,7 @@ const StartDogTimer: React.FC<StartDogTimerProps> = ({ player }) => {
             email: nowPlaying.email,
             phone_number: nowPlaying.phone_number,
             puzzle_type: nowPlaying.puzzle_type,
-            time_started: new Date().toLocaleTimeString('it-IT'),
+            time_started: new Date().toISOString().split('T')[1].split('.')[0],
             time_modified: new Date().toISOString(),
             time_used: nowPlaying.time_used,
             rep_id: nowPlaying.rep_id,

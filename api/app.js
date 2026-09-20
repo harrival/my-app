@@ -22,6 +22,19 @@ const io = new Server(server, {
   path: "/socket.io/"
 });
 
+io.on('connection', (socket) => {
+  console.log(`🔌 Socket connected: ${socket.id}`);
+  
+  socket.on('join_business_room', (business) => {
+    socket.join(business);
+    console.log(`🔌 Socket ${socket.id} joined room: ${business}`);
+  });
+  
+  socket.on('disconnect', () => {
+    console.log(`🔌 Socket disconnected: ${socket.id}`);
+  });
+});
+
 app.use(express.json());
 app.use(cors({
   origin: 'https://my-app-frontend-production-34ef.up.railway.app', // Your frontend domain
@@ -78,8 +91,26 @@ const setupDbListener = async () => {
 
     client.on('notification', (msg) => {
       if (msg.channel === 'game_players_changes') {
-        console.log("🔔 DB Change detected! Emitting refresh to all TvDisplays.");
-        io.emit('game_players_updated');
+        try {
+          if (!msg.payload) {
+            console.log("🔔 DB Change detected (no payload). Emitting refresh signal.");
+            io.emit('game_players_updated');
+            return;
+          }
+          const payload = JSON.parse(msg.payload);
+          const { operation, data } = payload;
+          const business = data.business;
+          
+          if (business) {
+            console.log(`🔔 DB Change: [${operation}] for business ${business}. Broadcasting delta.`);
+            io.to(business).emit('game_players_delta', { operation, player: data });
+          } else {
+            io.emit('game_players_delta', { operation, player: data });
+          }
+        } catch (err) {
+          console.error("Error parsing PG notification payload:", err);
+          io.emit('game_players_updated');
+        }
       }
     });
 
@@ -113,8 +144,34 @@ const migrateDb = async () => {
       ALTER TABLE reps_table ADD COLUMN IF NOT EXISTS business VARCHAR(100);
       ALTER TABLE game_players_table ADD COLUMN IF NOT EXISTS business VARCHAR(100);
       ALTER TABLE que_number_table ADD COLUMN IF NOT EXISTS business VARCHAR(100);
+
+      CREATE OR REPLACE FUNCTION notify_game_players_changes() RETURNS trigger AS $$
+      DECLARE
+        payload TEXT;
+      BEGIN
+        IF (TG_OP = 'DELETE') THEN
+          payload := json_build_object(
+            'operation', TG_OP,
+            'data', row_to_json(OLD)
+          )::text;
+        ELSE
+          payload := json_build_object(
+            'operation', TG_OP,
+            'data', row_to_json(NEW)
+          )::text;
+        END IF;
+        
+        PERFORM pg_notify('game_players_changes', payload);
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+
+      DROP TRIGGER IF EXISTS game_players_changes_trigger ON game_players_table;
+      CREATE TRIGGER game_players_changes_trigger
+      AFTER INSERT OR UPDATE OR DELETE ON game_players_table
+      FOR EACH ROW EXECUTE FUNCTION notify_game_players_changes();
     `);
-    console.log("✅ DB Migrations completed successfully (business columns ensured).");
+    console.log("✅ DB Migrations completed successfully (business columns and triggers ensured).");
   } catch (err) {
     console.error("❌ DB Migrations failed:", err);
   }

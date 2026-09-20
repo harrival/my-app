@@ -4,37 +4,41 @@ import { BASE_URL } from '../../shared/Utils/apiConfig'; // Import BASE_URL
 
 interface RefreshContextType {
   refreshKey: number;
+  socket: any;
 }
 
 const RefreshContext = createContext<RefreshContextType | undefined>(undefined);
 
 export const RefreshProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [refreshKey, setRefreshKey] = useState(0);
+  const [socket, setSocket] = useState<any>(null);
  
   useEffect(() => {
   // Centralized socket connection with path definition
-  const socket = io(BASE_URL, {
+  const socketInstance = io(BASE_URL, {
       path: '/socket.io/', // Tells the client to match the backend path structure
       transports: ['websocket', 'polling'],
       secure: true, // Forces secure production connections over HTTPS/WSS
       reconnection: true
   });
 
-  socket.on('connect', () => console.log('✅ RefreshContext: Connected to Update Server'));
-  socket.on('connect_error', (err) => console.error('❌ RefreshContext Error:', err));
+  socketInstance.on('connect', () => console.log('✅ RefreshContext: Connected to Update Server'));
+  socketInstance.on('connect_error', (err) => console.error('❌ RefreshContext Error:', err));
 
-  socket.on('game_players_updated', () => {
+  socketInstance.on('game_players_updated', () => {
     console.log('⚡ RefreshContext: DB Update Signal Received');
     setRefreshKey(prev => prev + 1);
   });
 
+  setSocket(socketInstance);
+
   return () => {
-    socket.disconnect();
+    socketInstance.disconnect();
   };
 }, []);
 
   return (
-    <RefreshContext.Provider value={{ refreshKey }}>
+    <RefreshContext.Provider value={{ refreshKey, socket }}>
       {children}
     </RefreshContext.Provider>
   );

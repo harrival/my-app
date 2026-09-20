@@ -88,24 +88,6 @@ CREATE TABLE IF NOT EXISTS que_number_table (
     FOREIGN KEY (event_id) REFERENCES events_table(event_guid)
 );
 
-INSERT INTO users_table (user_guid, first_name, last_name, email, phone_number, address, permission_group, is_admin) VALUES
-('GUID1000', 'Uche', 'Nwosu', 'uchenwosu@gmail.com', '1111111111', '123 street city state, usa 12345', 'Admin', true),
-('GUID1001', 'Obinna', 'Agu', 'obinnaagu@gmail.com', '1111111112', '456 street city state, usa 12345', 'Rep', false),
-('GUID1002', 'Onyi', 'Okeke', 'onyiokeke@gmail.com', '1111111113', '789 street city state, usa 12345', 'Customer', false);
-
-INSERT INTO events_table (event_guid, event_type, event_location, event_first_date, event_last_date, event_type_created_by) VALUES
-('GUID2000', 'Peoria Fair', 'Peoria Illinios', '2025-06-30', '2025-07-07', 'GUID1000'),
-('GUID3000', 'Illinios State Fair', 'Spring Illinios', '2025-07-09', '2025-07-16', 'GUID1000'),
-('GUID4000', 'Indiana State Fair', 'Indianapolis Indiana', '2025-07-18', '2025-07-25', 'GUID1000');
-
-INSERT INTO puzzles_type (puzzle_type_guid, puzzle_name, is_archived, puzzle_type_created_by) VALUES
-('GUID20001', 'CAT', false, 'GUID1000'),
-('GUID30001', 'DOG', false, 'GUID1000'),
-('GUID40001', 'BIRD', true, 'GUID1000');
-
-INSERT INTO reps_table (rep_guid, rep, event_id, is_active) VALUES
-('GUID10001', 'GUID1001', 'GUID2000', true);
-
 -- 1. Create the notification function
 CREATE OR REPLACE FUNCTION notify_game_players_changes() RETURNS trigger AS $$
 BEGIN

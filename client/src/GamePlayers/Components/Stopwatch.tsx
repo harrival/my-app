@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Card from '../../UI/Card/Card';
+import axios from 'axios';
+import { BASE_URL } from '../../shared/Utils/apiConfig';
 
 interface ColorSample {
   time: number;
@@ -14,6 +16,10 @@ const Stopwatch: React.FC = () => {
   const [isCameraActive, setIsCameraActive] = useState<boolean>(true);
   const [cameraError, setCameraError] = useState<string>('');
 
+  const [usernameInput, setUsernameInput] = useState<string>('');
+  const [searchedPlayer, setSearchedPlayer] = useState<any>(null);
+  const [searchError, setSearchError] = useState<string>('');
+
   const timerRef = useRef<any>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -26,6 +32,7 @@ const Stopwatch: React.FC = () => {
   const samplesRef = useRef<ColorSample[]>([]);
   const lastTriggerTimeRef = useRef<number>(0);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const searchedPlayerRef = useRef<any>(null);
 
   const logDebug = (msg: string) => {
     console.log(msg);
@@ -40,6 +47,9 @@ const Stopwatch: React.FC = () => {
     timeRef.current = time;
   }, [time]);
 
+  useEffect(() => {
+    searchedPlayerRef.current = searchedPlayer;
+  }, [searchedPlayer]);
 
   // Standard Stopwatch Timer Interval
   useEffect(() => {
@@ -95,19 +105,77 @@ const Stopwatch: React.FC = () => {
     }
   };
 
+  const handleSearchSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSearchError('');
+    setSearchedPlayer(null);
 
+    if (!usernameInput.trim()) {
+      setSearchError('Please enter a username');
+      return;
+    }
+
+    try {
+      const response = await axios.get(`${BASE_URL}/getAll`, {
+        params: {
+          tableName: 'game_players_table',
+          username: usernameInput.trim(),
+          game_status: 'Created',
+          limit: 1
+        }
+      });
+
+      if (response.data && response.data.length > 0) {
+        setSearchedPlayer(response.data[0]);
+      } else {
+        setSearchError('No active player found with that username');
+      }
+    } catch (err) {
+      console.error('Error searching player:', err);
+      setSearchError('Failed to search player. Please try again.');
+    }
+  };
 
   // Trigger start function
-  const handleStart = () => {
+  const handleStart = async () => {
     lastTriggerTimeRef.current = Date.now();
     setIsRunning(true);
     playBeep(880, 0.1);
     setTimeout(() => playBeep(880, 0.1), 150);
     logDebug("⏱️ START Triggered");
+
+    const player = searchedPlayerRef.current;
+    if (player) {
+      const startTime = new Date().toLocaleTimeString('it-IT');
+      try {
+        const editedPlayer = {
+          game_status: 'In_progress',
+          time_started: startTime,
+        };
+        await axios.patch(
+          `${BASE_URL}/editPlayerForm/${player.player_guid}`,
+          editedPlayer
+        );
+        logDebug(`Updated player ${player.username} status to In_progress`);
+        setSearchedPlayer((prev: any) => prev ? { ...prev, game_status: 'In_progress', time_started: startTime } : null);
+      } catch (err) {
+        console.error("Error updating player to In_progress:", err);
+      }
+    }
+  };
+
+  const timeFormat = (ms: number) => {
+    if (isNaN(ms) || ms < 0) return "00:00:00";
+
+    const hrs = Math.floor(ms / 3600000);
+    const mins = Math.floor((ms % 3600000) / 60000);
+    const secs = Math.floor((ms % 60000) / 1000);
+
+    return `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
   // Trigger stop function and save
-  const handleStop = () => {
+  const handleStop = async () => {
     lastTriggerTimeRef.current = Date.now();
     setIsRunning(false);
     playBeep(440, 0.3);
@@ -116,6 +184,35 @@ const Stopwatch: React.FC = () => {
     const duration = timeRef.current;
 
     logDebug("⏱️ STOP Triggered. Duration: " + formatTime(duration));
+
+    const player = searchedPlayerRef.current;
+    if (player) {
+      const timeEnded = new Date().toLocaleTimeString('it-IT');
+      const timeUsedSeconds = Math.floor(duration / 1000);
+      const playedDate = new Date().toISOString().split('T')[0];
+      const timeModified = new Date().toISOString();
+
+      const editedPlayer = {
+        game_status: 'Completed',
+        time_ended: timeEnded,
+        time_used: timeFormat(duration),
+        time_used_in_sec: timeUsedSeconds,
+        played_date: playedDate,
+        time_modified: timeModified
+      };
+
+      try {
+        await axios.patch(
+          `${BASE_URL}/editPlayerForm/${player.player_guid}`,
+          editedPlayer
+        );
+        logDebug(`Updated player ${player.username} status to Completed`);
+        setSearchedPlayer(null); // Clear active loaded player after completion
+        setUsernameInput('');    // Clear input
+      } catch (err) {
+        console.error("Error updating player to Completed:", err);
+      }
+    }
 
     logDebug("⏱️ Scheduling auto-reset in 5 seconds...");
     setTimeout(() => {
@@ -342,6 +439,72 @@ const Stopwatch: React.FC = () => {
           <h1 style={{ marginBottom: '1.5rem', color: '#1a1a1a', fontSize: '2rem', fontWeight: 700 }}>
             ⏱️ Player's Stopwatch
           </h1>
+
+          {/* Search Box */}
+          <form onSubmit={handleSearchSubmit} style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'center', gap: '10px' }}>
+            <input
+              type="text"
+              placeholder="Enter Username"
+              value={usernameInput}
+              onChange={(e) => setUsernameInput(e.target.value)}
+              style={{
+                padding: '0.8rem 1.2rem',
+                fontSize: '1rem',
+                border: '2px solid #ccc',
+                borderRadius: '8px',
+                width: '260px',
+                outline: 'none',
+                transition: 'border-color 0.2s',
+              }}
+              onFocus={(e) => e.target.style.borderColor = '#34c759'}
+              onBlur={(e) => e.target.style.borderColor = '#ccc'}
+            />
+            <button
+              type="submit"
+              style={{
+                padding: '0.8rem 1.5rem',
+                fontSize: '1rem',
+                fontWeight: 'bold',
+                backgroundColor: '#34c759',
+                color: 'white',
+                border: 'none',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                boxShadow: '0 4px 6px rgba(52, 199, 89, 0.2)',
+                transition: 'background-color 0.2s',
+              }}
+              onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#2da94d'}
+              onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#34c759'}
+            >
+              Load Player
+            </button>
+          </form>
+
+          {/* Player Info display */}
+          {searchedPlayer && (
+            <div style={{
+              background: '#e7ffe3',
+              border: '2px dashed #34c759',
+              borderRadius: '12px',
+              padding: '1rem',
+              marginBottom: '2rem',
+              display: 'inline-block',
+              minWidth: '320px',
+              textAlign: 'left'
+            }}>
+              <h3 style={{ margin: '0 0 0.5rem 0', color: '#2da94d' }}>Loaded Player:</h3>
+              <p style={{ margin: '0.2rem 0' }}><strong>Username:</strong> {searchedPlayer.username}</p>
+              <p style={{ margin: '0.2rem 0' }}><strong>Puzzle Type:</strong> {searchedPlayer.puzzle_type}</p>
+              <p style={{ margin: '0.2rem 0' }}><strong>Status:</strong> {searchedPlayer.game_status}</p>
+            </div>
+          )}
+
+          {searchError && (
+            <div style={{ color: '#ff3b30', background: '#ffebeb', padding: '0.8rem 1.2rem', borderRadius: '8px', marginBottom: '2rem', display: 'inline-block', minWidth: '320px' }}>
+              {searchError}
+            </div>
+          )}
+
           <div
             ref={displayRef}
             style={{
@@ -362,6 +525,70 @@ const Stopwatch: React.FC = () => {
             }}
           >
             {formatTime(time)}
+          </div>
+
+          {/* Manual Control Buttons */}
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '15px', marginBottom: '2rem' }}>
+            {!isRunning ? (
+              <button
+                onClick={handleStart}
+                disabled={!searchedPlayer}
+                style={{
+                  padding: '0.8rem 2rem',
+                  fontSize: '1.1rem',
+                  fontWeight: 'bold',
+                  backgroundColor: searchedPlayer ? '#34c759' : '#a2a2a2',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '30px',
+                  cursor: searchedPlayer ? 'pointer' : 'not-allowed',
+                  boxShadow: searchedPlayer ? '0 4px 10px rgba(52, 199, 89, 0.3)' : 'none',
+                  transition: 'background-color 0.2s',
+                }}
+                onMouseOver={(e) => searchedPlayer && (e.currentTarget.style.backgroundColor = '#2da94d')}
+                onMouseOut={(e) => searchedPlayer && (e.currentTarget.style.backgroundColor = '#34c759')}
+              >
+                Start
+              </button>
+            ) : (
+              <button
+                onClick={handleStop}
+                style={{
+                  padding: '0.8rem 2rem',
+                  fontSize: '1.1rem',
+                  fontWeight: 'bold',
+                  backgroundColor: '#ff3b30',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '30px',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 10px rgba(255, 59, 48, 0.3)',
+                  transition: 'background-color 0.2s',
+                }}
+                onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#e03126'}
+                onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#ff3b30'}
+              >
+                Stop
+              </button>
+            )}
+            <button
+              onClick={handleReset}
+              style={{
+                padding: '0.8rem 2rem',
+                fontSize: '1.1rem',
+                fontWeight: 'bold',
+                backgroundColor: '#6c757d',
+                color: 'white',
+                border: 'none',
+                borderRadius: '30px',
+                cursor: 'pointer',
+                transition: 'background-color 0.2s',
+              }}
+              onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#5a6268'}
+              onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#6c757d'}
+            >
+              Reset
+            </button>
           </div>
 
           {cameraError && (

@@ -45,7 +45,7 @@ const Header = (props) => {
                     <NavLink
                         to={`/${business}`}
                         className={classes.link}
-                        onClick={() => props.setColor("#ebe3ff")}>Home
+                        onClick={() => props.setColor("#e7ffe3")}>Home
                     </NavLink>
 
                     <NavLink
@@ -64,7 +64,7 @@ const Header = (props) => {
                         <NavLink
                             to={`/${business}/Admin`}
                             className={classes.link}
-                            onClick={() => props.setColor("#fdfae1")}>Admin
+                            onClick={() => props.setColor("#e7ffe3")}>Admin
                         </NavLink>
                     )}
                 </>

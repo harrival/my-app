@@ -53,7 +53,7 @@ function App() {
     return false;
   });
   const [showModal, setShowModal] = useState(false);
-  const [color, setColor] = useState();
+  const [color, setColor] = useState('#e7ffe3');
 
   const login = useCallback(() => setIsLoggedIn(true), []);
   const logout = useCallback(() => {

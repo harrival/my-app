@@ -1,27 +1,49 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { type Player } from './PlayerInterface';
 import { BASE_URL } from '../../shared/Utils/apiConfig';
+import { useUserProfile } from '../../shared/Context/UserProfileContext';
+import { useRefresh } from '../../shared/Context/RefreshContext';
 import classes from '../Styles/PlayerBuilder.module.scss';
 
 const TopPlayer: React.FC = () => {
+  const { user } = useUserProfile();
+  const { socket } = useRefresh();
   const [topPlayers, setTopPlayers] = useState<Player[]>([]);
 
+  const fetchTopPlayers = useCallback(async () => {
+    try {
+      // Fetching top 10 completed players sorted by fastest time
+      const response = await axios.get<Player[]>(`${BASE_URL}/completedPlayers`, {
+        params: { limit: 3, sortBy: 'time_used_in_sec', sortDir: 'ASC', business: user?.business }
+      });
+      setTopPlayers(response.data || []);
+    } catch (error) {
+      console.error('Error fetching top players:', error);
+    }
+  }, [user?.business]);
+
   useEffect(() => {
-    const fetchTopPlayers = async () => {
-      try {
-        // Fetching top 10 completed players sorted by fastest time
-        const response = await axios.get<Player[]>(`${BASE_URL}/completedPlayers`, {
-          params: { limit: 3, sortBy: 'time_used_in_sec', sortDir: 'ASC' }
-        });
-        setTopPlayers(response.data);
-      } catch (error) {
-        console.error('Error fetching top players:', error);
+    fetchTopPlayers();
+  }, [fetchTopPlayers]);
+
+  useEffect(() => {
+    if (!socket || !user?.business) return;
+
+    socket.emit('join_business_room', user.business);
+
+    const handleDelta = (event: { operation: string, player: Player }) => {
+      // Refetch when a player is completed or deleted
+      if (event.player.game_status === 'Completed' || event.operation === 'DELETE') {
+        fetchTopPlayers();
       }
     };
 
-    fetchTopPlayers();
-  }, []);
+    socket.on('game_players_delta', handleDelta);
+    return () => {
+      socket.off('game_players_delta', handleDelta);
+    };
+  }, [socket, user?.business, fetchTopPlayers]);
 
   return (
     <div className={classes.staticTableContainer}>
