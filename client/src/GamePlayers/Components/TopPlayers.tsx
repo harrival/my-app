@@ -7,30 +7,39 @@ import { useRefresh } from '../../shared/Context/RefreshContext';
 import classes from '../Styles/PlayerBuilder.module.scss';
 
 const TopPlayer: React.FC = () => {
-  const { user } = useUserProfile();
+  const { profile } = useUserProfile();
   const { socket } = useRefresh();
   const [topPlayers, setTopPlayers] = useState<Player[]>([]);
 
   const fetchTopPlayers = useCallback(async () => {
+    if (!profile?.rep_id) return;
+    const dbObject = {
+      tableName: 'game_players_table',
+      limit: 3,
+      sortBy: 'time_used_in_sec',
+      sortDir: 'ASC',
+      rep: profile?.rep_id,
+      game_status: "Completed",
+    }
     try {
       // Fetching top 10 completed players sorted by fastest time
-      const response = await axios.get<Player[]>(`${BASE_URL}/completedPlayers`, {
-        params: { limit: 3, sortBy: 'time_used_in_sec', sortDir: 'ASC', business: user?.business }
+      const response = await axios.get<Player[]>(`${BASE_URL}/getAll`, {
+        params: dbObject
       });
       setTopPlayers(response.data || []);
     } catch (error) {
       console.error('Error fetching top players:', error);
     }
-  }, [user?.business]);
+  }, [profile?.rep_id]);
 
   useEffect(() => {
     fetchTopPlayers();
   }, [fetchTopPlayers]);
 
   useEffect(() => {
-    if (!socket || !user?.business) return;
+    if (!socket || !profile?.rep_id) return;
 
-    socket.emit('join_business_room', user.business);
+    socket.emit('join_rep_room', profile.rep_id);
 
     const handleDelta = (event: { operation: string, player: Player }) => {
       // Refetch when a player is completed or deleted
@@ -43,7 +52,7 @@ const TopPlayer: React.FC = () => {
     return () => {
       socket.off('game_players_delta', handleDelta);
     };
-  }, [socket, user?.business, fetchTopPlayers]);
+  }, [socket, profile?.rep_id, fetchTopPlayers]);
 
   return (
     <div className={classes.staticTableContainer}>
@@ -61,10 +70,10 @@ const TopPlayer: React.FC = () => {
             <tr
               key={player.player_guid}
               style={{
-                backgroundColor: 
-                  index === 0 ? 'lightgreen' : 
-                  index === 1 ? 'lightyellow' : 
-                  index === 2 ? '#ffcccc' : undefined
+                backgroundColor:
+                  index === 0 ? 'lightgreen' :
+                    index === 1 ? 'lightyellow' :
+                      index === 2 ? '#ffcccc' : undefined
               }}
             >
               <td>{index + 1}</td>

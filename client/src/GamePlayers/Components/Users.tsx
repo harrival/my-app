@@ -5,12 +5,14 @@ import classes from '../Styles/Users.module.css'; // Import CSS module
 import { UserType } from './UserInterface'; // Import UserType from the new interface file
 import AddUserForm from '../../UI/Form/AddUserForm';
 import EditUserForm from '../../UI/Form/EditUserForm';
+import { useUserProfile } from '../../shared/Context/UserProfileContext';
 
 interface UsersProps {
     onBack?: () => void;
 }
 
 const Users: React.FC<UsersProps> = ({ onBack }) => {
+    const { profile } = useUserProfile();
     const [users, setUsers] = useState<UserType[]>([]);
     const [selectedUser, setSelectedUser] = useState<UserType | null>(null);
     const [showEditUserForm, setShowEditUserForm] = useState<boolean>(false); // New state for edit form
@@ -22,7 +24,10 @@ const Users: React.FC<UsersProps> = ({ onBack }) => {
             try {
                 // Calling the generic getAll endpoint with the specific table name
                 const response = await axios.get(`${BASE_URL}/getAll`, {
-                    params: { tableName: "users_table" }
+                    params: {
+                        tableName: "users_table",
+                        ...(!profile?.is_admin && { business: profile?.business })
+                    }
                 });
                 setUsers(response.data);
             } catch (error) {
@@ -37,7 +42,6 @@ const Users: React.FC<UsersProps> = ({ onBack }) => {
             try {
                 // Using the new generic deleteItem route
                 await axios.delete(`${BASE_URL}/deleteItem/users_table/user_guid/${userGuid}`);
-                console.log("User deleted successfully");
                 setRefreshTrigger(prev => prev + 1); // Trigger local re-fetch
             } catch (error) {
                 console.error('Error deleting user:', error);
@@ -74,11 +78,11 @@ const Users: React.FC<UsersProps> = ({ onBack }) => {
             <div className={classes.headerContainer}>
                 <h1>Users Management</h1>
                 <div className={classes.buttonGroup}>
-                    {onBack && <button className={classes.actionButton} onClick={onBack}>Back to Admin</button>}
                     <button className={classes.actionButton} onClick={() => setShowAddUser(true)}>Add User</button>
+                    {onBack && <button className={classes.actionButton} onClick={onBack}>Back</button>}
                 </div>
             </div>
-            
+
             {showAddUser && <AddUserForm onClose={handleCloseAddUserForm} onSuccess={handleCloseAddUserForm} />}
             {showEditUserForm && selectedUser && <EditUserForm user={selectedUser} onClose={handleCloseEditUserForm} onSuccess={handleCloseEditUserForm} />}
 

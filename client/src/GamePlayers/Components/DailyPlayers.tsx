@@ -8,34 +8,37 @@ import { useRefresh } from '../../shared/Context/RefreshContext';
 import classes from '../Styles/PlayerBuilder.module.scss';
 
 const DailyPlayers = () => {
-    const { user } = useUserProfile();
+    const { profile } = useUserProfile();
     const { socket } = useRefresh();
     const [playedPlayers, setPlayedPlayers] = useState<Player[]>([]);
 
     const fetchUsers = useCallback(async () => {
+        const dbObject = {
+            tableName: "game_players_table",
+            rep_id: profile?.rep_id,
+            limit: 3,
+            sortBy: "time_modified",
+            sortDir: "DESC",
+            game_status: "Completed",
+        }
         try {
-            const response = await axios.get<Player[]>(`${BASE_URL}/completedPlayers`, {
-                params: {
-                    limit: 3,
-                    sortBy: 'time_modified',
-                    sortDir: 'DESC',
-                    business: user?.business
-                }
+            const response = await axios.get<Player[]>(`${BASE_URL}/getAll`, {
+                params: dbObject
             });
             setPlayedPlayers(response.data || []);
         } catch (error) {
             console.error('Error fetching users:', error);
         }
-    }, [user?.business]);
+    }, [profile?.rep_id]);
 
     useEffect(() => {
         fetchUsers();
     }, [fetchUsers]);
 
     useEffect(() => {
-        if (!socket || !user?.business) return;
+        if (!socket || !profile?.business) return;
 
-        socket.emit('join_business_room', user.business);
+        socket.emit('join_business_room', profile.business);
 
         const handleDelta = (event: { operation: string, player: Player }) => {
             // Refetch when a player is completed or deleted
@@ -48,7 +51,7 @@ const DailyPlayers = () => {
         return () => {
             socket.off('game_players_delta', handleDelta);
         };
-    }, [socket, user?.business, fetchUsers]);
+    }, [socket, profile?.business, fetchUsers]);
 
     return (
         <div className={classes.centeredContainer}>
@@ -71,8 +74,8 @@ const DailyPlayers = () => {
                             style={{
                                 backgroundColor:
                                     index === 0 ? 'lightgreen' :
-                                    index === 1 ? 'lightyellow' :
-                                    index === 2 ? '#ffcccc' : undefined
+                                        index === 1 ? 'lightyellow' :
+                                            index === 2 ? '#ffcccc' : undefined
                             }}
                         >
                             <td>{player.username}</td>

@@ -11,8 +11,8 @@ const time_modified = null;
 interface PuzzleFormProps {
   setShowPuzzleForm: (value: boolean) => void;
   setAllPlayers: React.Dispatch<React.SetStateAction<Player[]>>;
-  agentGuid: string;
-  currentEvent: string;
+  agentGuid: string | undefined | null;
+  currentEvent: string | undefined | null;
 }
 
 // Define types for form state
@@ -54,7 +54,7 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers, agentGuid, current
 
   const validateUsername = (value: string): string => {
     if (!value) return 'Username is required';
-    if (value.length < 5) return 'Username must be at least 5 characters long';
+    if (value.length < 3) return 'Username must be at least 3 characters long';
     return '';
   };
 
@@ -67,7 +67,9 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers, agentGuid, current
     try {
       const dbObject = {
         tableName: "game_players_table",
-        fields: { username }
+        fields: { username },
+        rep_id: agentGuid,
+
       };
       const response = await axios.get(`${BASE_URL}/dbsearch`, { params: dbObject });
       if (response.data.length > 0) {
@@ -82,10 +84,6 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers, agentGuid, current
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const { id, value } = e.target;
     setFormState((prevState) => ({ ...prevState, [id]: value }));
-
-    let error = '';
-    if (id === 'username') error = validateUsername(value);
-    setErrors((prevErrors) => ({ ...prevErrors, [id]: error }));
   };
 
   const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>): void => {
@@ -114,35 +112,10 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers, agentGuid, current
     });
 
     if (!contactError && !usernameError && !puzzlePetError) {
-      let assignedQueNumber = 1;
 
-      try {
-        const queResponse = await axios.get(`${BASE_URL}/getOne`, {
-          params: { tableName: "que_number_table" }
-        });
-
-        if (queResponse.data) {
-          assignedQueNumber = Number(queResponse.data.last_number) + 1;
-          // Update existing record using the dynamic PATCH route
-          await axios.patch(`${BASE_URL}/editPlayerForm/${queResponse.data.id}`, {
-            tableName: "que_number_table",
-            idColumn: "id",
-            last_number: assignedQueNumber
-          });
-        } else {
-          assignedQueNumber = 1;
-          await axios.post(`${BASE_URL}/addToTable`, {
-            tableName: "que_number_table",
-            fields: { last_number: 1 } // If DB uses 'number', change 'last_number' to 'number'
-          });
-        }
-      } catch (error) {
-        console.error('Error handling queue number:', error);
-      }
-
-      const uniqueId = 'PLAYERG' + Date.now().toString();
+      const uniqueId = crypto.randomUUID();// Generate a new GUID
       const newPlayer: Player = {
-        id: '',
+        id: 0,
         game_status: 'Created',
         player_guid: uniqueId,
         username: formState.username,
@@ -153,7 +126,6 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers, agentGuid, current
         time_ended: '00:00:00',
         time_used: '00:00:00',
         played_date: new Date().toISOString().split('T')[0],
-        player_que_number: assignedQueNumber,
         time_created: new Date().toISOString(),
         time_modified,
         rep_id: agentGuid,

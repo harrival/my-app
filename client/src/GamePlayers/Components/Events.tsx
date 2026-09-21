@@ -25,7 +25,7 @@ const Events: React.FC<EventsProps> = ({ onBack }) => {
                 const response = await axios.get(`${BASE_URL}/getAll`, {
                     params: {
                         tableName: "events_table",
-                        business: profile?.business,
+                        ...(!profile?.is_admin && { business: profile?.business }),
                         orderBy: 'event_first_date',
                         sortDir: 'DESC'
                     }
@@ -42,7 +42,6 @@ const Events: React.FC<EventsProps> = ({ onBack }) => {
         if (window.confirm("Are you sure you want to delete this event?")) {
             try {
                 await axios.delete(`${BASE_URL}/deleteItem/events_table/event_guid/${eventGuid}`);
-                console.log("Event deleted successfully");
                 setRefreshTrigger(prev => prev + 1); // Trigger local re-fetch
             } catch (error) {
                 console.error('Error deleting event:', error);
@@ -72,8 +71,8 @@ const Events: React.FC<EventsProps> = ({ onBack }) => {
             <div className={classes.headerContainer}>
                 <h1>Events Management</h1>
                 <div className={classes.buttonGroup}>
-                    {onBack && <button className={classes.actionButton} onClick={onBack}>Back to Admin</button>}
-                    <button className={classes.actionButton} onClick={() => setShowAddEvent(true)}>Add Event</button>
+                    {!profile?.is_admin && <button className={classes.actionButton} onClick={() => setShowAddEvent(true)}>Add Event</button>}
+                    {onBack && <button className={classes.actionButton} onClick={onBack}>Back</button>}
                 </div>
             </div>
 

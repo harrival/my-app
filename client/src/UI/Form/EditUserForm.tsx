@@ -42,7 +42,6 @@ const EditUserForm: React.FC<EditUserFormProps> = ({ user, onClose, onSuccess })
         setErrors(newErrors);
         if (Object.values(newErrors).some(err => err !== '')) return;
 
-        console.log('Updating user:', formData);
         try {
             // Example API call to update user
             const response = await axios.patch(`${BASE_URL}/editPlayerForm/${formData.user_guid}`, {
@@ -51,7 +50,6 @@ const EditUserForm: React.FC<EditUserFormProps> = ({ user, onClose, onSuccess })
                 ...formData,
                 is_admin: formData.permission_group === 'admin', // Derive from permission_group
             });
-            console.log('User updated:', response.data);
             onSuccess(); // Notify parent to refresh data
             onClose();
         } catch (error) {

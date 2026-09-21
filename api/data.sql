@@ -1,5 +1,4 @@
 DROP TABLE IF EXISTS game_players_table CASCADE;
-DROP TABLE IF EXISTS que_number_table CASCADE;
 DROP TABLE IF EXISTS reps_table CASCADE;
 DROP TABLE IF EXISTS puzzles_type CASCADE;
 DROP TABLE IF EXISTS events_table CASCADE;
@@ -31,7 +30,7 @@ CREATE TABLE IF NOT EXISTS events_table (
     time_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     time_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     business VARCHAR(100),
-    FOREIGN KEY (event_type_created_by) REFERENCES users_table(user_guid)
+    FOREIGN KEY (event_type_created_by) REFERENCES users_table(user_guid) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS puzzles_type (
@@ -43,7 +42,7 @@ CREATE TABLE IF NOT EXISTS puzzles_type (
     time_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     time_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     business VARCHAR(100),
-    FOREIGN KEY (puzzle_type_created_by) REFERENCES users_table(user_guid)
+    FOREIGN KEY (puzzle_type_created_by) REFERENCES users_table(user_guid) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS reps_table (
@@ -53,8 +52,8 @@ CREATE TABLE IF NOT EXISTS reps_table (
     event_id VARCHAR(50),
     is_active BOOLEAN,
     business VARCHAR(100),
-    FOREIGN KEY (rep) REFERENCES users_table(user_guid),
-    FOREIGN KEY (event_id) REFERENCES events_table(event_guid)
+    FOREIGN KEY (rep) REFERENCES users_table(user_guid) ON DELETE CASCADE,
+    FOREIGN KEY (event_id) REFERENCES events_table(event_guid) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS game_players_table (
@@ -76,23 +75,28 @@ CREATE TABLE IF NOT EXISTS game_players_table (
     event_id VARCHAR(50),
     played_date DATE,
     business VARCHAR(100),
-    FOREIGN KEY (rep_id) REFERENCES reps_table(rep_guid),
-    FOREIGN KEY (event_id) REFERENCES events_table(event_guid)
-);
-
-CREATE TABLE IF NOT EXISTS que_number_table (
-    id SERIAL,
-    last_number INTEGER,
-    event_id VARCHAR(50),
-    business VARCHAR(100),
-    FOREIGN KEY (event_id) REFERENCES events_table(event_guid)
+    FOREIGN KEY (rep_id) REFERENCES reps_table(rep_guid) ON DELETE CASCADE,
+    FOREIGN KEY (event_id) REFERENCES events_table(event_guid) ON DELETE CASCADE
 );
 
 -- 1. Create the notification function
 CREATE OR REPLACE FUNCTION notify_game_players_changes() RETURNS trigger AS $$
+DECLARE
+  payload TEXT;
 BEGIN
-  -- This sends the signal 'game_players_changes'
-  PERFORM pg_notify('game_players_changes', '');
+  IF (TG_OP = 'DELETE') THEN
+    payload := json_build_object(
+      'operation', TG_OP,
+      'data', row_to_json(OLD)
+    )::text;
+  ELSE
+    payload := json_build_object(
+      'operation', TG_OP,
+      'data', row_to_json(NEW)
+    )::text;
+  END IF;
+  
+  PERFORM pg_notify('game_players_changes', payload);
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;

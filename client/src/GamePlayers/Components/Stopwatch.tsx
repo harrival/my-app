@@ -35,7 +35,6 @@ const Stopwatch: React.FC = () => {
   const searchedPlayerRef = useRef<any>(null);
 
   const logDebug = (msg: string) => {
-    console.log(msg);
   };
 
   // Sync refs with state changes

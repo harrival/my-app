@@ -1,11 +1,11 @@
 import React from 'react';
 
-const User = () => {
+const Home: React.FC = () => {
     return (
         <>
-        <p>User</p>
+        <p>Home</p>
         </>
     );
 }
  
-export default User;
+export default Home;

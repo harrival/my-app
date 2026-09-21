@@ -78,7 +78,7 @@ const RowTimer: React.FC<{ timeStarted: string }> = ({ timeStarted }) => {
 };
 
 const DogPlayersDisplay: React.FC = () => {
-  const { user } = useUserProfile();
+  const { profile } = useUserProfile();
   const { socket } = useRefresh();
   const [players, setPlayers] = useState<Player[]>([]);
 
@@ -89,16 +89,18 @@ const DogPlayersDisplay: React.FC = () => {
           tableName: "game_players_table",
           puzzle_type: 'DOG',
           game_status: ['Created', 'In_progress'],
-          limit: 20
+          limit: 20,
+          business: profile?.business,
+          rep: profile?.user_guid,
         }
       });
       const dogs = response.data
         .sort((a, b) => {
           if (a.game_status === 'In_progress' && b.game_status !== 'In_progress') return -1;
           if (b.game_status === 'In_progress' && a.game_status !== 'In_progress') return 1;
-          
-          const queA = a.player_que_number;
-          const queB = b.player_que_number;
+
+          const queA = a.id;
+          const queB = b.id;
           if (queA === null && queB === null) return 0;
           if (queA === null) return 1;
           if (queB === null) return -1;
@@ -116,10 +118,10 @@ const DogPlayersDisplay: React.FC = () => {
 
   // Handle namespaced real-time updates (delta mapping)
   useEffect(() => {
-    if (!socket || !user?.business) return;
+    if (!socket || !profile?.business) return;
 
     // Join room for this business location
-    socket.emit('join_business_room', user.business);
+    socket.emit('join_business_room', profile.business);
 
     const handleDelta = (event: { operation: string, player: Player }) => {
       // Check if it belongs to this table's puzzle type
@@ -150,9 +152,9 @@ const DogPlayersDisplay: React.FC = () => {
         return updatedList.sort((a, b) => {
           if (a.game_status === 'In_progress' && b.game_status !== 'In_progress') return -1;
           if (b.game_status === 'In_progress' && a.game_status !== 'In_progress') return 1;
-          
-          const queA = a.player_que_number;
-          const queB = b.player_que_number;
+
+          const queA = a.id;
+          const queB = b.id;
           if (queA === null && queB === null) return 0;
           if (queA === null) return 1;
           if (queB === null) return -1;
@@ -165,7 +167,7 @@ const DogPlayersDisplay: React.FC = () => {
     return () => {
       socket.off('game_players_delta', handleDelta);
     };
-  }, [socket, user?.business]);
+  }, [socket, profile?.business]);
 
   const hasInProgress = players.some(p => p.game_status === 'In_progress');
 
@@ -199,7 +201,7 @@ const DogPlayersDisplay: React.FC = () => {
               }
             >
               <td>
-                <span> {player.player_que_number}</span>
+                <span> {player.id}</span>
               </td>
               <td>{player.username}</td>
               <td>

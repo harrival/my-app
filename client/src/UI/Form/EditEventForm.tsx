@@ -69,7 +69,7 @@ const EditEventForm: React.FC<EditEventFormProps> = ({ event, onClose, onSuccess
         const newErrors: Record<string, string> = {};
         if (!formData.event_type) newErrors.event_type = "Event type is required";
         if (!formData.event_type_created_by) newErrors.event_type_created_by = "Creator selection is required";
-        
+
         if (!isLongTermEvent) {
             if (!formData.event_first_date) newErrors.event_first_date = "Start date is required";
             if (!formData.event_last_date) newErrors.event_last_date = "End date is required";
@@ -83,7 +83,6 @@ const EditEventForm: React.FC<EditEventFormProps> = ({ event, onClose, onSuccess
         setErrors(newErrors);
         if (Object.keys(newErrors).length > 0) return;
 
-        console.log('Updating event:', formData);
         try {
             const response = await axios.patch(`${BASE_URL}/editPlayerForm/${formData.event_guid}`, {
                 tableName: 'events_table',
@@ -93,7 +92,6 @@ const EditEventForm: React.FC<EditEventFormProps> = ({ event, onClose, onSuccess
                 event_last_date: isLongTermEvent ? null : formData.event_last_date,
                 time_modified: new Date().toISOString(),
             });
-            console.log('Event updated:', response.data);
             onSuccess();
             onClose();
         } catch (error) {

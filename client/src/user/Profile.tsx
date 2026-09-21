@@ -3,9 +3,7 @@ import Card from '../UI/Card/Card';
 import { useUserProfile } from '../shared/Context/UserProfileContext';
 
 const ProfilePage = () => {
-    const { user, profile, hasProfile, loading } = useUserProfile();
-    console.log("👤 [ProfilePage] Logged in user property:", user);
-    console.log("👤 [ProfilePage] Logged in profile property:", profile);
+    const { profile, hasProfile, loading } = useUserProfile();
 
     if (loading) {
         return (

@@ -148,7 +148,6 @@ const AddRepForm = ({ setShowAddRep }: AddRepProps) => {
         setErrors(newErrors);
         if (Object.values(newErrors).some(err => err !== '')) return;
 
-        console.log('Form Submitted:', rep);
         try {
             // Assuming 'rep' state holds the data for the new representative
             // You'll need to map 'rep' fields to your 'reps_table' schema
@@ -162,7 +161,6 @@ const AddRepForm = ({ setShowAddRep }: AddRepProps) => {
                     business: rep.Business,
                 }
             });
-            console.log('Representative added:', response.data);
             setShowAddRep(false); // Close the form
             // You might want to trigger a refresh in the parent Reps component here
         } catch (error) {
@@ -178,13 +176,13 @@ const AddRepForm = ({ setShowAddRep }: AddRepProps) => {
                     axios.get(`${BASE_URL}/getAll/`, {
                         params: {
                             tableName: "users_table",
-                            business: rep.Business
+                            business: profile?.business
                         }
                     }),
                     axios.get(`${BASE_URL}/getAll/`, {
                         params: {
                             tableName: "events_table",
-                            business: rep.Business
+                            business: profile?.business
                         }
                     })
                 ]);
@@ -197,7 +195,7 @@ const AddRepForm = ({ setShowAddRep }: AddRepProps) => {
         };
 
         fetchData();
-    }, []);
+    }, [profile?.business]);
 
     useEffect(() => {
         const firstNames = reps.map(rep => rep.FirstName);

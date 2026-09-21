@@ -19,11 +19,8 @@ const PlayerBuilder: React.FC = () => {
   const [showPuzzleForm, setShowPuzzleForm] = useState<boolean>(false);
   const [showEditPuzzleForm, setShowEditPuzzleForm] = useState<boolean>(false);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
-  const [agent, setAgent] = useState<string>('');
-  const [currentEvent, setCurrentEvent] = useState<string>('');
 
   useEffect(() => {
-    console.log('All players:', allPlayers);
     const cats = allPlayers.filter(player => player.puzzle_type === 'CAT' && player.game_status !== 'Completed');
     const dogs = allPlayers.filter(player => player.puzzle_type === 'DOG' && player.game_status !== 'Completed');
 
@@ -34,29 +31,11 @@ const PlayerBuilder: React.FC = () => {
   useEffect(() => {
     const fetchUsers = async () => {
       const dbObject = {
-        tableName: "reps_table",
-        rep: profile?.user_guid
-      };
-      try { // Note: Your /reps endpoint is not a generic /getAll, it has a join.
-        const response = await axios.get(`${BASE_URL}/getOne`, { params: dbObject });
-        setAgent(response.data.rep_guid);
-        setCurrentEvent(response.data.event_id);
-      } catch (error) {
-        console.error('Error fetching users:', error);
-      }
-    };
-    fetchUsers();
-  }, []);
-
-  useEffect(() => {
-    const fetchUsers = async () => {
-      const dbObject = {
         tableName: "game_players_table",
-        rep_id: agent,
+        rep_id: profile?.rep_id,
         played_date: new Date().toISOString().split('T')[0],
       };
       try {
-        console.log('request for agent', agent)
         const response = await axios.get<Player[]>(`${BASE_URL}/getAll/`, { params: dbObject });
         setAllPlayers(response.data);
       } catch (error) {
@@ -65,7 +44,7 @@ const PlayerBuilder: React.FC = () => {
     };
 
     fetchUsers();
-  }, [refreshKey, agent]); // Now updates automatically when any view changes the DB
+  }, [refreshKey, profile?.rep_id]); // Now updates automatically when any view changes the DB
 
   const showPuzzleFormHandler = () => {
     setShowPuzzleForm(!showPuzzleForm);
@@ -79,7 +58,6 @@ const PlayerBuilder: React.FC = () => {
   const deletePlayerHandler = async (playerId: string) => {
     try {
       const response = await axios.delete(`${BASE_URL}/deletePlayer/${playerId}`);
-      console.log('Player deleted:', response.data);
       if (response.data.message === 'Deleted') {
         setAllPlayers(prevPlayers => prevPlayers.filter(player => player.player_guid !== playerId));
       }
@@ -108,8 +86,8 @@ const PlayerBuilder: React.FC = () => {
           <PlayerPuzzleForm
             setShowPuzzleForm={setShowPuzzleForm}
             setAllPlayers={setAllPlayers}
-            agentGuid={agent}
-            currentEvent={currentEvent}
+            agentGuid={profile?.rep_id}
+            currentEvent={profile?.event_id}
           />
         </div>
       )}
@@ -125,9 +103,9 @@ const PlayerBuilder: React.FC = () => {
         </div>
       )}
 
-      <div className={classes.centerButton}>
+      {profile?.rep_id && <div className={classes.centerButton}>
         <Button onClick={showPuzzleFormHandler}>Add player</Button>
-      </div>
+      </div>}
       <div className={classes.searchBox}>
         <input
           type="text"

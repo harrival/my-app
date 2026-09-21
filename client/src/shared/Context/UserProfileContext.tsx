@@ -4,7 +4,6 @@ import { BASE_URL } from '../../shared/Utils/apiConfig';
 
 export interface UserProfile {
   id: number;
-  user_guid: string;
   first_name: string;
   last_name: string;
   email: string;
@@ -14,17 +13,17 @@ export interface UserProfile {
   is_admin: boolean;
   business?: string;
   business_value?: string;
+  rep_id?: string | null;
+  event_id?: string | null;
   [key: string]: any;
 }
 
 interface UserProfileContextType {
   profile: UserProfile | null;
-  user: UserProfile | null;
   user_guid?: string;
   hasProfile: boolean;
   loading: boolean;
   setProfile: (profile: UserProfile | null) => void;
-  setUser: (user: UserProfile | null) => void;
   refreshProfile: () => Promise<void>;
 }
 
@@ -82,6 +81,20 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
         if (response.data && Object.keys(response.data).length > 0) {
           profileData = response.data;
         }
+        const responseRep = await axios.get(`${BASE_URL}/getOne`, {
+          params: {
+            tableName: 'reps_table',
+            rep: userGuid,
+            is_active: true
+          }
+        });
+        if (responseRep.data?.rep_guid) {
+          setProfileState(prev => prev ? {
+            ...prev,
+            rep_id: responseRep.data.rep_guid,
+            event_id: responseRep.data.event_id
+          } : prev);
+        }
       } else if (business) {
         // Fetch active profile by business name
         const response = await axios.get<UserProfile>(`${BASE_URL}/active-profile/${business}`);
@@ -100,7 +113,10 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
           permissionGroup: profileData.permission_group
         };
         localStorage.setItem('userSession', JSON.stringify(session));
-        setProfileState(profileData);
+        setProfileState(prev => prev ? {
+          ...prev,
+          ...profileData
+        } : profileData);
 
         // Redirect back to the original destination if we are currently at /Auth
         if (window.location.pathname.toLowerCase().endsWith('/auth')) {
@@ -121,21 +137,15 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
     refreshProfile();
   }, [refreshProfile]);
 
-  useEffect(() => {
-    console.log("👤 [UserProfileContext] Logged in user property (user):", profile);
-  }, [profile]);
-
   const hasProfile = !!profile;
 
   return (
     <UserProfileContext.Provider value={{
       profile,
-      user: profile,
       user_guid: profile?.user_guid,
       hasProfile,
       loading,
       setProfile,
-      setUser: setProfile,
       refreshProfile
     }}>
       {children}

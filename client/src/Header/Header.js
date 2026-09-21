@@ -10,10 +10,8 @@ import { BASE_URL } from '../shared/Utils/apiConfig';
 
 const Header = (props) => {
     const auth = useContext(AuthContext);
-    const { user, profile, setProfile, setUser } = useUserProfile();
+    const { profile, setProfile, setUser } = useUserProfile();
     let navigate = useNavigate();
-    console.log("Header renders. auth.isLoggedIn =", auth.isLoggedIn);
-    console.log("👤 [Header] Logged in user property:", user);
 
     const business = profile?.business || "non_business";
     const permissionGroup = profile?.permission_group || null;
@@ -42,11 +40,11 @@ const Header = (props) => {
         <div className={classes.navLinks}>
             {auth.isLoggedIn &&
                 <>
-                    <NavLink
+                    {/* <NavLink
                         to={`/${business}`}
                         className={classes.link}
                         onClick={() => props.setColor("#e7ffe3")}>Home
-                    </NavLink>
+                    </NavLink> */}
 
                     <NavLink
                         to={`/${business}/PlayerBuilder`}
@@ -54,17 +52,19 @@ const Header = (props) => {
                         onClick={() => props.setColor("#e7ffe3")}>Play Ground
                     </NavLink>
 
-                    <NavLink
-                        to={`/${business}/Reps`}
-                        className={classes.link}
-                        onClick={() => props.setColor("#e7ffe3")}>Reps
-                    </NavLink>
+                    {permissionGroup === 'Agent' && (
+                        <NavLink
+                            to={`/${business}/tvdisplay`}
+                            className={classes.link}
+                            onClick={() => props.setColor("#e7ffe3")}>Tv Display
+                        </NavLink>
+                    )}
 
                     {permissionGroup !== 'Agent' && (
                         <NavLink
-                            to={`/${business}/Admin`}
+                            to={`/${business}/BusinessManager`}
                             className={classes.link}
-                            onClick={() => props.setColor("#e7ffe3")}>Admin
+                            onClick={() => props.setColor("#e7ffe3")}>Business Manager
                         </NavLink>
                     )}
                 </>

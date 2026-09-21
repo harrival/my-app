@@ -64,7 +64,6 @@ const AddEventForm: React.FC<AddEventFormProps> = ({ onClose, onSuccess }) => {
         setErrors(newErrors);
         if (Object.keys(newErrors).length > 0) return;
 
-        console.log('Submitting new event:', formData);
         try {
             const response = await axios.post(`${BASE_URL}/addToTable`, {
                 tableName: 'events_table',
@@ -77,7 +76,7 @@ const AddEventForm: React.FC<AddEventFormProps> = ({ onClose, onSuccess }) => {
                     time_modified: new Date().toISOString(),
                 }
             });
-            console.log('Event added:', response.data);
+
             onSuccess();
             onClose();
         } catch (error) {

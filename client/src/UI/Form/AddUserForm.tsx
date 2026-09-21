@@ -26,7 +26,7 @@ const AddUserForm: React.FC<AddUserFormProps> = ({ onClose, onSuccess }) => {
         email: '',
         phone_number: '',
         address: '',
-        permission_group: 'agent',
+        permission_group: 'Agent',
         business: '',
     });
 
@@ -35,7 +35,7 @@ const AddUserForm: React.FC<AddUserFormProps> = ({ onClose, onSuccess }) => {
     useEffect(() => {
         if (isSupervisor) {
             const userBusiness = profile?.business || profile?.business_value || '';
-            setFormData(prev => ({ ...prev, business: userBusiness, permission_group: 'agent' }));
+            setFormData(prev => ({ ...prev, business: userBusiness, permission_group: 'Agent' }));
         }
     }, [isSupervisor, profile]);
 
@@ -85,7 +85,6 @@ const AddUserForm: React.FC<AddUserFormProps> = ({ onClose, onSuccess }) => {
             return;
         }
 
-        console.log('Submitting new user:', formData);
         try {
             // Example API call (replace with your actual /addToTable endpoint logic)
             const response = await axios.post(`${BASE_URL}/addToTable`, {
@@ -97,7 +96,6 @@ const AddUserForm: React.FC<AddUserFormProps> = ({ onClose, onSuccess }) => {
                     time_created: new Date().toISOString(),
                 }
             });
-            console.log('User added:', response.data);
             onSuccess(); // Notify parent to refresh data
             onClose();
         } catch (error) {

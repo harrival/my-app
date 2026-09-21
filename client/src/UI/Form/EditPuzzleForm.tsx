@@ -61,7 +61,7 @@ const EditPuzzleForm = ({
 
     const validateUsername = (value: string): string => {
         if (!value) return 'Username is required';
-        if (value.length < 5) return 'Username must be at least 5 characters long';
+        if (value.length < 3) return 'Username must be at least 3 characters long';
         return '';
     };
 
@@ -89,18 +89,11 @@ const EditPuzzleForm = ({
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
         const { id, value } = e.target;
         setFormState((prevState) => ({ ...prevState, [id]: value }));
-
-        let error = '';
-        if (id === 'username') error = validateUsername(value);
-        setErrors((prevErrors) => ({ ...prevErrors, [id]: error }));
     };
 
     const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>): void => {
         const value = e.target.value;
         setFormState((prevState) => ({ ...prevState, puzzlePet: value }));
-
-        const error = validatePuzzlePet(value);
-        setErrors((prevErrors) => ({ ...prevErrors, puzzlePet: error }));
     };
 
     const handleEditPuzzleForm = async (e: React.FormEvent): Promise<void> => {
@@ -131,7 +124,6 @@ const EditPuzzleForm = ({
                     `${BASE_URL}/editPlayerForm/${player.player_guid}`,
                     editedPlayer
                 );
-                console.log('Player updated:', response.data);
 
                 if (response.status === 200) {
                     const updatedPuzzleState = puzzleState.map((p) =>

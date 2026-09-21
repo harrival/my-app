@@ -12,30 +12,28 @@ const RefreshContext = createContext<RefreshContextType | undefined>(undefined);
 export const RefreshProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [refreshKey, setRefreshKey] = useState(0);
   const [socket, setSocket] = useState<any>(null);
- 
+
   useEffect(() => {
-  // Centralized socket connection with path definition
-  const socketInstance = io(BASE_URL, {
+    // Centralized socket connection with path definition
+    const socketInstance = io(BASE_URL, {
       path: '/socket.io/', // Tells the client to match the backend path structure
       transports: ['websocket', 'polling'],
       secure: true, // Forces secure production connections over HTTPS/WSS
       reconnection: true
-  });
+    });
 
-  socketInstance.on('connect', () => console.log('✅ RefreshContext: Connected to Update Server'));
-  socketInstance.on('connect_error', (err) => console.error('❌ RefreshContext Error:', err));
+    socketInstance.on('connect_error', (err) => console.error('❌ RefreshContext Error:', err));
 
-  socketInstance.on('game_players_updated', () => {
-    console.log('⚡ RefreshContext: DB Update Signal Received');
-    setRefreshKey(prev => prev + 1);
-  });
+    socketInstance.on('game_players_updated', () => {
+      setRefreshKey(prev => prev + 1);
+    });
 
-  setSocket(socketInstance);
+    setSocket(socketInstance);
 
-  return () => {
-    socketInstance.disconnect();
-  };
-}, []);
+    return () => {
+      socketInstance.disconnect();
+    };
+  }, []);
 
   return (
     <RefreshContext.Provider value={{ refreshKey, socket }}>

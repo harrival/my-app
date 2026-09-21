@@ -8,7 +8,6 @@ const SCOPED_TABLES = [
   'events_table',
   'game_players_table',
   'puzzles_type',
-  'que_number_table',
   'reps_table',
   'users_table'
 ];
@@ -24,7 +23,8 @@ function isScopedTable(tableName) {
 /** Get users: [user, user, user] */
 
 /** Get all users */
-router.get("/reps", async function (req, res, next) {
+router.get("/getAllInnerJoin", async function (req, res, next) {
+  const { ...filters } = req.query;
   try {
 
     let query = `
@@ -34,6 +34,18 @@ router.get("/reps", async function (req, res, next) {
       INNER JOIN events_table et ON rp.event_id = et.event_guid
     `;
     const queryParams = [];
+    const filterKeys = Object.keys(filters);
+
+    if (filterKeys.length > 0) {
+      const whereClauses = filterKeys.map((key) => {
+        const value = filters[key];
+        queryParams.push(value);
+        return Array.isArray(value)
+          ? `rp.${key} = ANY($${queryParams.length})`
+          : `rp.${key} = $${queryParams.length}`;
+      });
+      query += ` WHERE ${whereClauses.join(" AND ")}`;
+    }
 
     const results = await db.query(query, queryParams);
     return res.json(results.rows);
@@ -211,8 +223,6 @@ router.get("/dbsearch", async function (req, res, next) {
 router.post("/addToTable", async function (req, res, next) {
   try {
     const { tableName, fields } = req.body;
-    console.log(fields);
-    console.log(tableName);
 
     if (!tableName || !fields || typeof fields !== 'object') {
       return res.status(400).json({ error: "Invalid input data" });
@@ -333,7 +343,6 @@ router.post("/profile/:user_guid", function (req, res, next) {
     const profile = req.body;
     if (!profile || Object.keys(profile).length === 0) {
       delete userProfiles[user_guid];
-      console.log(`❌ Cleared profile for user_guid: ${user_guid}. Active profiles:`, Object.keys(userProfiles));
       return res.json({ success: true, profile: null });
     }
 
@@ -342,8 +351,6 @@ router.post("/profile/:user_guid", function (req, res, next) {
     profile.business_value = businessValue;
 
     userProfiles[user_guid] = profile;
-    console.log(`💾 Storing profile for user_guid: ${user_guid}. Current userProfiles keys:`, Object.keys(userProfiles));
-    console.log("👤 Full profile contents:", JSON.stringify(profile, null, 2));
 
     return res.json({ success: true, profile: userProfiles[user_guid] });
   } catch (err) {
@@ -355,12 +362,10 @@ router.get("/profile/:user_guid", async function (req, res, next) {
   try {
     const { user_guid } = req.params;
     if (userProfiles[user_guid]) {
-      console.log(`🔍 GET /profile/${user_guid} (from memory) - Returning:`, userProfiles[user_guid]);
       return res.json(userProfiles[user_guid]);
     }
 
     // Fallback: fetch from database and restore cache
-    console.log(`🔍 GET /profile/${user_guid} not in memory, querying database...`);
     const result = await db.query(
       "SELECT * FROM users_table WHERE user_guid = $1",
       [user_guid]
@@ -372,11 +377,9 @@ router.get("/profile/:user_guid", async function (req, res, next) {
       profile.business_value = businessValue;
       userProfiles[user_guid] = profile;
 
-      console.log(`💾 Restored profile from DB for user_guid: ${user_guid}`);
       return res.json(profile);
     }
 
-    console.log(`🔍 GET /profile/${user_guid} - Not found in memory or database.`);
     return res.json(null);
   } catch (err) {
     return next(err);
@@ -391,10 +394,8 @@ router.get("/active-profile/:business", function (req, res, next) {
       (profile) => profile.business && profile.business.toLowerCase() === business.toLowerCase()
     );
     if (activeUser) {
-      console.log(`🔍 GET /active-profile/${business} - Found active session for user_guid: ${activeUser.user_guid}`);
       return res.json(activeUser);
     }
-    console.log(`🔍 GET /active-profile/${business} - No active session found.`);
     return res.json(null);
   } catch (err) {
     return next(err);

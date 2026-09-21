@@ -13,8 +13,7 @@ interface RepsProps {
 }
 
 const Reps: React.FC<RepsProps> = ({ onBack }) => {
-    const { profile, user } = useUserProfile();
-    console.log("👤 [Reps] Logged in user profile:", profile);
+    const { profile } = useUserProfile();
     const [repsTable, setRepsTable] = useState<RepsTypes[]>([]);
     const [refreshTrigger, setRefreshTrigger] = useState<number>(0); // Local state to trigger re-fetch
     const [showAddRep, setShowAddRep] = useState<boolean>(false);
@@ -23,16 +22,18 @@ const Reps: React.FC<RepsProps> = ({ onBack }) => {
 
     useEffect(() => {
         const fetchUsers = async () => {
-            const dbObject = {
-                tableName: "reps_table",
-                business: profile?.business
-            };
-            try { // Note: Your /reps endpoint is not a generic /getAll, it has a join.
-                const response = await axios.get(`${BASE_URL}/reps`, { params: dbObject });
+            if (repsTable.length === 0) {
+                const dbObject = {
+                    ...(!profile?.is_admin && { business: profile?.business }),
+                    is_active: true
+                };
+                try {
+                    const response = await axios.get(`${BASE_URL}/getAllInnerJoin`, { params: dbObject });
 
-                setRepsTable(prepareRepsData(response.data));
-            } catch (error) {
-                console.error('Error fetching users:', error);
+                    setRepsTable(prepareRepsData(response.data));
+                } catch (error) {
+                    console.error('Error fetching users:', error);
+                }
             }
         };
         fetchUsers();
@@ -42,7 +43,6 @@ const Reps: React.FC<RepsProps> = ({ onBack }) => {
         if (window.confirm("Are you sure you want to delete this representative?")) {
             try {
                 await axios.delete(`${BASE_URL}/deleteItem/reps_table/rep_guid/${repGuid}`);
-                console.log("Representative deleted successfully");
                 setRefreshTrigger(prev => prev + 1); // Trigger local re-fetch
             } catch (error) {
                 console.error('Error deleting representative:', error);
@@ -72,8 +72,8 @@ const Reps: React.FC<RepsProps> = ({ onBack }) => {
             <div className={classes.headerContainer}>
                 <h1>Boot Representatives</h1>
                 <div className={classes.buttonGroup}>
-                    {onBack && <button className={classes.actionButton} onClick={onBack}>Back to Admin</button>}
-                    <button className={classes.actionButton} onClick={() => setShowAddRep(true)}>Add Representative</button>
+                    {!profile?.is_admin && <button className={classes.actionButton} onClick={() => setShowAddRep(true)}>Add Representative</button>}
+                    {onBack && <button className={classes.actionButton} onClick={onBack}>Back</button>}
                 </div>
             </div>
 
@@ -101,8 +101,8 @@ const Reps: React.FC<RepsProps> = ({ onBack }) => {
                             <td className={classes.tableTd}>{rep.EventType}</td>
                             <td className={classes.tableTd}>{rep.IsActive ? "Yes" : "No"}</td>
                             <td className={classes.tableTd}>{rep.EventLocation}</td>
-                            <td className={classes.tableTd}>{new Date(rep.EventFirstDate).toLocaleDateString()}</td>
-                            <td className={classes.tableTd}>{new Date(rep.EventLastDate).toLocaleDateString()}</td>
+                            <td className={classes.tableTd}>{rep.EventFirstDate === 'N/A' ? 'N/A' : new Date(rep.EventFirstDate).toLocaleDateString()}</td>
+                            <td className={classes.tableTd}>{rep.EventLastDate === 'N/A' ? 'N/A' : new Date(rep.EventLastDate).toLocaleDateString()}</td>
                             <td className={classes.tableTd}>
                                 <button className={`${classes.actionButton} ${classes.editButton}`} onClick={() => handleEditRep(rep)}>Edit</button>
                                 <button className={classes.actionButton} onClick={() => handleDeleteRep(rep.RepGUID)}>Delete</button>

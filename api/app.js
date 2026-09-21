@@ -23,15 +23,12 @@ const io = new Server(server, {
 });
 
 io.on('connection', (socket) => {
-  console.log(`🔌 Socket connected: ${socket.id}`);
-  
-  socket.on('join_business_room', (business) => {
-    socket.join(business);
-    console.log(`🔌 Socket ${socket.id} joined room: ${business}`);
+
+  socket.on('join_rep_room', (repId) => {
+    socket.join(repId);
   });
-  
+
   socket.on('disconnect', () => {
-    console.log(`🔌 Socket disconnected: ${socket.id}`);
   });
 });
 
@@ -93,17 +90,15 @@ const setupDbListener = async () => {
       if (msg.channel === 'game_players_changes') {
         try {
           if (!msg.payload) {
-            console.log("🔔 DB Change detected (no payload). Emitting refresh signal.");
             io.emit('game_players_updated');
             return;
           }
           const payload = JSON.parse(msg.payload);
           const { operation, data } = payload;
-          const business = data.business;
-          
-          if (business) {
-            console.log(`🔔 DB Change: [${operation}] for business ${business}. Broadcasting delta.`);
-            io.to(business).emit('game_players_delta', { operation, player: data });
+          const repId = data.rep_id;
+
+          if (repId) {
+            io.to(repId).emit('game_players_delta', { operation, player: data });
           } else {
             io.emit('game_players_delta', { operation, player: data });
           }
@@ -120,7 +115,6 @@ const setupDbListener = async () => {
       setTimeout(setupDbListener, 5000); // Try to reconnect
     });
 
-    console.log("🚀 PostgreSQL is now WATCHING 'game_players_changes'");
   } catch (err) {
     console.error('❌ Failed to setup DB listener:', err);
     if (client) client.release();
@@ -171,7 +165,6 @@ const migrateDb = async () => {
       AFTER INSERT OR UPDATE OR DELETE ON game_players_table
       FOR EACH ROW EXECUTE FUNCTION notify_game_players_changes();
     `);
-    console.log("✅ DB Migrations completed successfully (business columns and triggers ensured).");
   } catch (err) {
     console.error("❌ DB Migrations failed:", err);
   }
@@ -181,5 +174,4 @@ migrateDb();
 // IMPORTANT: Use server.listen, not app.listen
 const PORT = process.env.PORT || 5001;
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 Server + WebSocket running on ${PORT}`);
 });
