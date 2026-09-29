@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode, useCallback } from 'react';
 import axios from 'axios';
 import { BASE_URL } from '../../shared/Utils/apiConfig';
 
@@ -24,44 +24,79 @@ interface UserProfileContextType {
   hasProfile: boolean;
   loading: boolean;
   setProfile: (profile: UserProfile | null) => void;
-  refreshProfile: () => Promise<void>;
+  refreshProfile: (loginUserGuid?: string) => Promise<void>;
 }
 
 const UserProfileContext = createContext<UserProfileContextType | undefined>(undefined);
 
+// 30 minutes of idle time before session expires
+const SESSION_DURATION_MS = 30 * 60 * 1000;
+
 // Capture the original path on initial load, before any react-router redirects happen
 const originalPath = window.location.pathname;
+
+/** Extend the session expiry in localStorage by SESSION_DURATION_MS from now */
+const extendSession = () => {
+  const sessionStr = localStorage.getItem('userSession');
+  if (!sessionStr) return;
+  try {
+    const session = JSON.parse(sessionStr);
+    session.expiresAt = Date.now() + SESSION_DURATION_MS;
+    localStorage.setItem('userSession', JSON.stringify(session));
+  } catch { /* ignore corrupted session */ }
+};
 
 export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [profile, setProfileState] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const lastActivityRef = useRef<number>(0);
+
+  // Track user activity and extend session on interaction (throttled to once per minute)
+  useEffect(() => {
+    const THROTTLE_MS = 60 * 1000;
+    const handleActivity = () => {
+      const now = Date.now();
+      if (now - lastActivityRef.current > THROTTLE_MS) {
+        lastActivityRef.current = now;
+        extendSession();
+      }
+    };
+
+    const events = ['mousemove', 'keydown', 'click', 'scroll', 'touchstart'] as const;
+    events.forEach(evt => window.addEventListener(evt, handleActivity));
+    return () => {
+      events.forEach(evt => window.removeEventListener(evt, handleActivity));
+    };
+  }, []);
 
   const setProfile = useCallback((newProfile: UserProfile | null) => {
     setProfileState(newProfile);
   }, []);
 
-  const refreshProfile = useCallback(async () => {
+  const refreshProfile = useCallback(async (loginUserGuid?: string) => {
     setLoading(true);
-    // 1. Check local session
-    const sessionStr = localStorage.getItem('userSession');
-    let userGuid: string | null = null;
+    // 1. Use provided userGuid, or check local session
+    let userGuid: string | null = loginUserGuid || null;
     let business: string | null = null;
 
-    if (sessionStr) {
-      try {
-        const session = JSON.parse(sessionStr);
-        if (session.expiresAt > Date.now()) {
-          userGuid = session.userGuid;
-          business = session.business;
-        } else {
-          localStorage.removeItem('userSession');
+    if (!userGuid) {
+      const sessionStr = localStorage.getItem('userSession');
+      if (sessionStr) {
+        try {
+          const session = JSON.parse(sessionStr);
+          if (session.expiresAt > Date.now()) {
+            userGuid = session.userGuid;
+            business = session.business;
+          } else {
+            localStorage.removeItem('userSession');
+          }
+        } catch (e) {
+          console.error(e);
         }
-      } catch (e) {
-        console.error(e);
       }
     }
 
-    // If no local session userGuid, try to parse business name from captured path
+    // If still no userGuid, try to parse business name from captured path
     if (!userGuid) {
       const segments = originalPath.split('/').filter(Boolean);
       if (segments.length > 0) {
@@ -74,6 +109,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
 
     try {
       let profileData: UserProfile | null = null;
+      let repData: { rep_id?: string; event_id?: string } = {};
 
       if (userGuid) {
         // Fetch profile by userGuid
@@ -89,11 +125,10 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
           }
         });
         if (responseRep.data?.rep_guid) {
-          setProfileState(prev => prev ? {
-            ...prev,
+          repData = {
             rep_id: responseRep.data.rep_guid,
             event_id: responseRep.data.event_id
-          } : prev);
+          };
         }
       } else if (business) {
         // Fetch active profile by business name
@@ -104,7 +139,8 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
       }
 
       if (profileData) {
-        const expiryTime = Date.now() + 10 * 60 * 60 * 1000;
+        // Store lightweight session for auth persistence across page refreshes
+        const expiryTime = Date.now() + SESSION_DURATION_MS;
         const session = {
           loggedIn: true,
           expiresAt: expiryTime,
@@ -113,15 +149,12 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
           permissionGroup: profileData.permission_group
         };
         localStorage.setItem('userSession', JSON.stringify(session));
-        setProfileState(prev => prev ? {
-          ...prev,
-          ...profileData
-        } : profileData);
 
-        // Redirect back to the original destination if we are currently at /Auth
-        if (window.location.pathname.toLowerCase().endsWith('/auth')) {
-          window.location.replace(originalPath);
-        }
+        // Profile data lives in context — access via useUserProfile()
+        setProfileState({
+          ...profileData,
+          ...repData
+        });
       } else {
         setProfileState(null);
       }

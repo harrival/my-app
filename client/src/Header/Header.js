@@ -18,12 +18,8 @@ const Header = (props) => {
 
     const logoutHandler = async () => {
         try {
-            const sessionStr = localStorage.getItem('userSession');
-            if (sessionStr) {
-                const session = JSON.parse(sessionStr);
-                if (session.userGuid) {
-                    await axios.post(`${BASE_URL}/profile/${session.userGuid}`, {});
-                }
+            if (profile?.user_guid) {
+                await axios.post(`${BASE_URL}/profile/${profile.user_guid}`, {});
             }
         } catch (err) {
             console.error('Error clearing profile on server:', err);
@@ -54,9 +50,9 @@ const Header = (props) => {
 
                     {permissionGroup === 'Agent' && (
                         <NavLink
-                            to={`/${business}/tvdisplay`}
+                            to={`/${business}/PlayersMonitor`}
                             className={classes.link}
-                            onClick={() => props.setColor("#e7ffe3")}>Tv Display
+                            onClick={() => props.setColor("#e7ffe3")}>Players Monitor
                         </NavLink>
                     )}
 

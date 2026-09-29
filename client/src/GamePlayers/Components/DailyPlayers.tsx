@@ -20,6 +20,7 @@ const DailyPlayers = () => {
             sortBy: "time_modified",
             sortDir: "DESC",
             game_status: "Completed",
+            played_date: new Date().toISOString().split('T')[0],
         }
         try {
             const response = await axios.get<Player[]>(`${BASE_URL}/getAll`, {

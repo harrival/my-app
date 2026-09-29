@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext } from 'react';
 import { AuthContext } from '../Context/auth-context';
 import { useUserProfile } from '../Context/UserProfileContext';
 import { useNavigate } from 'react-router-dom';
@@ -8,9 +8,11 @@ import Card from '../../UI/Card/Card';
 import Button from '../../UI/Button/Button';
 import classes from './Auth.module.scss';
 
+const MAX_OTP_ATTEMPTS = 3;
+
 const AuthenticateUser = () => {
     const auth = useContext(AuthContext);
-    const { setProfile } = useUserProfile();
+    const { profile, setProfile, refreshProfile } = useUserProfile();
     const navigate = useNavigate();
 
     const [phoneNumber, setPhoneNumber] = useState('+1 ');
@@ -20,8 +22,8 @@ const AuthenticateUser = () => {
     const [error, setError] = useState('');
     const [infoMessage, setInfoMessage] = useState('');
     const [authenticatedUser, setAuthenticatedUser] = useState(null);
-
-
+    const [otpAttempts, setOtpAttempts] = useState(0);
+    const [loading, setLoading] = useState(false);
 
     const handlePhoneSubmit = async (event) => {
         event.preventDefault();
@@ -37,6 +39,7 @@ const AuthenticateUser = () => {
             return;
         }
 
+        setLoading(true);
         try {
             const response = await axios.get(`${BASE_URL}/getAll`, {
                 params: {
@@ -54,6 +57,7 @@ const AuthenticateUser = () => {
                 console.log(`OTP: ${otp}`);
                 console.log('--------------------------');
 
+                setOtpAttempts(0);
                 setStep(2);
                 setInfoMessage('Verification code generated. Please check your console.');
             } else {
@@ -62,6 +66,8 @@ const AuthenticateUser = () => {
         } catch (err) {
             console.error('Error verifying phone number:', err);
             setError('An error occurred. Please try again.');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -69,60 +75,66 @@ const AuthenticateUser = () => {
         event.preventDefault();
         setError('');
 
-        if (otpInput === generatedOtp) {
-            try {
-                // Store on server
-                await axios.post(`${BASE_URL}/profile/${authenticatedUser.user_guid}`, authenticatedUser);
+        if (otpAttempts >= MAX_OTP_ATTEMPTS) {
+            setError('Too many failed attempts. Please go back and request a new code.');
+            return;
+        }
 
-                // Store session to expire in 10 hours (10 * 60 * 60 * 1000 ms)
-                const expiryTime = Date.now() + 10 * 60 * 60 * 1000;
-                localStorage.setItem(
-                    'userSession',
-                    JSON.stringify({
-                        loggedIn: true,
-                        expiresAt: expiryTime,
-                        userGuid: authenticatedUser.user_guid,
-                        business: authenticatedUser.business,
-                        permissionGroup: authenticatedUser.permission_group
-                    })
-                );
-
-                // Log user in
-                setProfile(authenticatedUser);
-                auth.login();
-                navigate('/', { replace: true });
-            } catch (err) {
-                console.error('Error storing profile on server:', err);
-                setError('Failed to log in on server. Please try again.');
+        if (otpInput !== generatedOtp) {
+            const newAttempts = otpAttempts + 1;
+            setOtpAttempts(newAttempts);
+            const remaining = MAX_OTP_ATTEMPTS - newAttempts;
+            if (remaining > 0) {
+                setError(`Incorrect code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`);
+            } else {
+                setError('Too many failed attempts. Please go back and request a new code.');
             }
-        } else {
-            setError('Incorrect 6-digit verification code. Please try again.');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            // Store active profile on server
+            await axios.post(`${BASE_URL}/profile/${authenticatedUser.user_guid}`, authenticatedUser);
+
+            // Navigate first, THEN flip isLoggedIn — otherwise the route tree
+            // switches and this component unmounts before navigate() executes
+            await refreshProfile(authenticatedUser.user_guid);
+            navigate('/', { replace: true });
+            auth.login();
+        } catch (err) {
+            console.error('Error storing profile on server:', err);
+            setError('Failed to log in on server. Please try again.');
+        } finally {
+            setLoading(false);
         }
     };
 
     const handleSignOut = async () => {
+        setLoading(true);
         try {
-            const sessionStr = localStorage.getItem('userSession');
-            if (sessionStr) {
-                const session = JSON.parse(sessionStr);
-                if (session.userGuid) {
-                    await axios.post(`${BASE_URL}/profile/${session.userGuid}`, {});
-                }
+            if (profile?.user_guid) {
+                await axios.post(`${BASE_URL}/profile/${profile.user_guid}`, {});
             }
         } catch (err) {
             console.error('Error clearing profile on server:', err);
+        } finally {
+            setProfile(null);
+            auth.logout();
+            setLoading(false);
         }
-        setProfile(null);
-        auth.logout();
     };
 
     const handleBackToPhone = () => {
         setStep(1);
         setOtpInput('');
         setGeneratedOtp('');
+        setOtpAttempts(0);
         setError('');
         setInfoMessage('');
     };
+
+    const isLocked = otpAttempts >= MAX_OTP_ATTEMPTS;
 
     return (
         <Card>
@@ -135,7 +147,9 @@ const AuthenticateUser = () => {
                         You are currently signed in.
                     </p>
                     <div className={classes.buttonBar}>
-                        <Button onClick={handleSignOut}>Sign Out</Button>
+                        <Button onClick={handleSignOut} disabled={loading}>
+                            {loading ? 'Signing out...' : 'Sign Out'}
+                        </Button>
                     </div>
                 </div>
             ) : (
@@ -164,6 +178,7 @@ const AuthenticateUser = () => {
                                     placeholder="+1 (555) 000-0000"
                                     value={phoneNumber}
                                     onChange={(e) => setPhoneNumber(e.target.value)}
+                                    disabled={loading}
                                     required
                                     style={{
                                         padding: '0.8rem',
@@ -180,7 +195,9 @@ const AuthenticateUser = () => {
                             </div>
 
                             <div className={classes.buttonBar}>
-                                <Button type="submit">Send Code</Button>
+                                <Button type="submit" disabled={loading}>
+                                    {loading ? 'Sending...' : 'Send Code'}
+                                </Button>
                             </div>
                         </form>
                     )}
@@ -198,24 +215,28 @@ const AuthenticateUser = () => {
                                     placeholder="Enter 6-digit code"
                                     value={otpInput}
                                     onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))}
+                                    disabled={loading || isLocked}
                                     required
                                     style={{
                                         padding: '0.8rem',
-                                        border: '2px solid #007bff',
+                                        border: `2px solid ${isLocked ? '#dc3545' : '#007bff'}`,
                                         borderRadius: '6px',
                                         fontSize: '1.2rem',
                                         letterSpacing: '0.3rem',
                                         textAlign: 'center',
                                         width: '100%',
                                         boxSizing: 'border-box',
-                                        fontWeight: 'bold'
+                                        fontWeight: 'bold',
+                                        opacity: isLocked ? 0.5 : 1
                                     }}
                                 />
                             </div>
 
                             <div className={classes.buttonBar} style={{ flexDirection: 'column', gap: '10px' }}>
-                                <Button type="submit">Verify & Login</Button>
-                                <Button inverse type="button" onClick={handleBackToPhone}>
+                                <Button type="submit" disabled={loading || isLocked}>
+                                    {loading ? 'Verifying...' : 'Verify & Login'}
+                                </Button>
+                                <Button inverse type="button" onClick={handleBackToPhone} disabled={loading}>
                                     Back
                                 </Button>
                             </div>

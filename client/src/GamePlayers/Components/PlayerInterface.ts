@@ -13,6 +13,7 @@ interface Player {
     time_used: string;
     time_modified: string | null;
     rep_id: string | undefined | null;
+    business: string | undefined | null;
     event_id: string | undefined | null;
     time_created: string;
 }

@@ -9,9 +9,8 @@ import AuthenticateUser from '../Authenticate/Auth';
 import ProfilePage from '../../user/Profile';
 import PlayerBuilder from '../../GamePlayers/Components/PlayerBuilder';
 import DailyPlayers from '../../GamePlayers/Components/DailyPlayers';
-import TvDisplay from '../../GamePlayers/Components/TvDisplay';
+import PlayersMonitor from '../../GamePlayers/Components/PlayersMonitor';
 import BusinessManager from '../../GamePlayers/Components/BusinessManager';
-import Stopwatch from '../../GamePlayers/Components/Stopwatch';
 
 const Router = () => {
     const auth = useContext(AuthContext);
@@ -29,8 +28,6 @@ const Router = () => {
     const business = profile?.business || "non_business";
     const permissionGroup = profile?.permission_group || null;
 
-    // Determine if accessing from another device (e.g. mobile, tablet, or smaller viewport)
-    const isAnotherDevice = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent) || window.innerWidth < 1024;
 
     if (auth.isLoggedIn) {
         routes = (
@@ -46,14 +43,10 @@ const Router = () => {
                 <Route path="/:business/DailyPlayers" element={<DailyPlayers />} />
                 <Route path="/:business/Profile" element={<ProfilePage />} />
                 <Route path="/:business/PlayerBuilder" element={<PlayerBuilder />} />
-                <Route path="/:business/tvdisplay" element={<TvDisplay />} />
+                <Route path="/:business/PlayersMonitor" element={<PlayersMonitor />} />
                 {permissionGroup !== 'Agent' && (
                     <Route path="/:business/BusinessManager" element={<BusinessManager />} />
                 )}
-                <Route
-                    path="/:business/stopwatch"
-                    element={isAnotherDevice ? <Stopwatch /> : <Navigate to={`/${business}`} replace />}
-                />
 
                 {/* Fallbacks for non-prefixed urls to redirect to prefixed versions */}
                 <Route path="/Home" element={<Navigate to={`/${business}/Home`} replace />} />
@@ -61,15 +54,11 @@ const Router = () => {
                 <Route path="/DailyPlayers" element={<Navigate to={`/${business}/DailyPlayers`} replace />} />
                 <Route path="/Profile" element={<Navigate to={`/${business}/Profile`} replace />} />
                 <Route path="/PlayerBuilder" element={<Navigate to={`/${business}/PlayerBuilder`} replace />} />
-                <Route path="/tvdisplay" element={<Navigate to={`/${business}/tvdisplay`} replace />} />
+                <Route path="/PlayersMonitor" element={<Navigate to={`/${business}/PlayersMonitor`} replace />} />
                 {permissionGroup !== 'Agent' && (
                     <Route path="/BusinessManager" element={<Navigate to={`/${business}/BusinessManager`} replace />} />
                 )}
-                <Route
-                    path="/stopwatch"
-                    element={isAnotherDevice ? <Navigate to={`/${business}/stopwatch`} replace /> : <Navigate to={`/${business}`} replace />}
-                />
-                <Route path="/Auth" element={<AuthenticateUser />} />
+                <Route path="/Auth" element={<Navigate to={`/${business}`} replace />} />
 
                 <Route path="*" element={<Navigate to={`/${business}`} replace />} />
             </>

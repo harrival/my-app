@@ -32,7 +32,8 @@ const PlayerBuilder: React.FC = () => {
     const fetchUsers = async () => {
       const dbObject = {
         tableName: "game_players_table",
-        rep_id: profile?.rep_id,
+        ...(profile?.rep_id && { rep_id: profile.rep_id }),
+        // ...(profile?.permission_group === 'Supervisor' && { business: profile.business }),
         played_date: new Date().toISOString().split('T')[0],
       };
       try {
@@ -88,6 +89,7 @@ const PlayerBuilder: React.FC = () => {
             setAllPlayers={setAllPlayers}
             agentGuid={profile?.rep_id}
             currentEvent={profile?.event_id}
+            business={profile?.business}
           />
         </div>
       )}

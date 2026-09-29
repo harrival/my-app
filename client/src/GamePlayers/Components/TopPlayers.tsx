@@ -18,8 +18,9 @@ const TopPlayer: React.FC = () => {
       limit: 3,
       sortBy: 'time_used_in_sec',
       sortDir: 'ASC',
-      rep: profile?.rep_id,
+      rep_id: profile?.rep_id,
       game_status: "Completed",
+      played_date: new Date().toISOString().split('T')[0]
     }
     try {
       // Fetching top 10 completed players sorted by fastest time

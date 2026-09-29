@@ -141,7 +141,8 @@ const AddRepForm = ({ setShowAddRep }: AddRepProps) => {
             EventLastDate: !rep.EventLastDate ? 'Last date is required' : ''
         };
 
-        if (rep.EventFirstDate && rep.EventLastDate && new Date(rep.EventLastDate) < new Date(rep.EventFirstDate)) {
+        if (rep.EventFirstDate && rep.EventLastDate && rep.EventFirstDate !== 'N/A' && rep.EventLastDate !== 'N/A'
+            && new Date(rep.EventLastDate) < new Date(rep.EventFirstDate)) {
             newErrors.EventLastDate = 'Event last date cannot be less than event first date';
         }
 
@@ -149,8 +150,61 @@ const AddRepForm = ({ setShowAddRep }: AddRepProps) => {
         if (Object.values(newErrors).some(err => err !== '')) return;
 
         try {
-            // Assuming 'rep' state holds the data for the new representative
-            // You'll need to map 'rep' fields to your 'reps_table' schema
+            // Check for existing rep assignments that would conflict
+            const existingRepsRes = await axios.get(`${BASE_URL}/getAll`, {
+                params: {
+                    tableName: 'reps_table',
+                    rep: rep.CustomerGUID,
+                    business: rep.Business,
+                }
+            });
+
+            const existingReps = existingRepsRes.data || [];
+
+            if (existingReps.length > 0) {
+                // Get the selected event's dates
+                const selectedEvent = events.find(ev => ev.event_guid === rep.EventType);
+                const newStart = selectedEvent?.event_first_date ? new Date(selectedEvent.event_first_date) : null;
+                const newEnd = selectedEvent?.event_last_date ? new Date(selectedEvent.event_last_date) : null;
+
+                for (const existing of existingReps) {
+                    // Get the existing assignment's event to check its dates
+                    const existingEvent = events.find(ev => ev.event_guid === existing.event_id);
+
+                    const existingStart = existingEvent?.event_first_date ? new Date(existingEvent.event_first_date) : null;
+                    const existingEnd = existingEvent?.event_last_date ? new Date(existingEvent.event_last_date) : null;
+
+                    // If the existing assignment's event has no dates, block creation entirely
+                    if (!existingStart && !existingEnd) {
+                        setErrors(prev => ({
+                            ...prev,
+                            CustomerGUID: `${rep.FirstName} ${rep.LastName} already has an assignment with no date boundaries (${existingEvent?.event_type || 'Unknown event'}). Cannot create another assignment.`
+                        }));
+                        return;
+                    }
+
+                    // If the new event has no dates, and the rep already has any assignment, block it
+                    if (!newStart && !newEnd) {
+                        setErrors(prev => ({
+                            ...prev,
+                            EventFirstDate: `Cannot assign an event with no dates — ${rep.FirstName} ${rep.LastName} already has existing assignments.`
+                        }));
+                        return;
+                    }
+
+                    // Check for date overlap: two ranges overlap if start1 <= end2 AND start2 <= end1
+                    if (newStart && newEnd && existingStart && existingEnd) {
+                        if (newStart <= existingEnd && existingStart <= newEnd) {
+                            setErrors(prev => ({
+                                ...prev,
+                                EventType: `Date conflict: ${rep.FirstName} ${rep.LastName} is already assigned to "${existingEvent?.event_type || 'an event'}" (${existingStart.toLocaleDateString()} – ${existingEnd.toLocaleDateString()}) which overlaps with the selected dates.`
+                            }));
+                            return;
+                        }
+                    }
+                }
+            }
+
             const response = await axios.post(`${BASE_URL}/addToTable`, {
                 tableName: 'reps_table',
                 fields: {
@@ -162,7 +216,6 @@ const AddRepForm = ({ setShowAddRep }: AddRepProps) => {
                 }
             });
             setShowAddRep(false); // Close the form
-            // You might want to trigger a refresh in the parent Reps component here
         } catch (error) {
             console.error('Error adding representative:', error);
             alert('Failed to add representative.');

@@ -74,7 +74,8 @@ const EditPuzzleForm = ({
         try {
             const dbObject = {
                 tableName: "game_players_table",
-                fields: { username }
+                fields: { username },
+                rep_id: player.rep_id,
             };
             const response = await axios.get(`${BASE_URL}/dbsearch`, { params: dbObject });
             if (response.data.length > 0) {

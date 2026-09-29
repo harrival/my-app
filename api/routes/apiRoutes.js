@@ -56,7 +56,13 @@ router.get("/getAllInnerJoin", async function (req, res, next) {
 
 /** Get items from a table with dynamic filters and limit */
 router.get("/getAll", async function (req, res, next) {
-  const { tableName, limit = 20, orderBy, sortDir, ...filters } = req.query;
+  const { tableName, limit = 20, orderBy, sortBy, sortDir, ...filters } = req.query;
+
+  // Security: Whitelist allowed sort columns to prevent SQL injection
+  const validSortColumns = ['time_used_in_sec', 'time_modified', 'time_created'];
+  const requestedSort = sortBy || orderBy || null;
+  const sortColumn = validSortColumns.includes(requestedSort) ? requestedSort : null;
+
   // Security: Validate sort direction
   const direction = (sortDir || '').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
   try {
@@ -77,8 +83,8 @@ router.get("/getAll", async function (req, res, next) {
       query += ` WHERE ${whereClauses.join(" AND ")}`;
     }
 
-    if (orderBy) {
-      query += ` ORDER BY ${orderBy} ${direction}`;
+    if (sortColumn) {
+      query += ` ORDER BY ${sortColumn} ${direction}`;
     }
 
     query += ` LIMIT $${queryParams.length + 1}`;

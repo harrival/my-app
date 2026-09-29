@@ -79,7 +79,7 @@ app.use(function (err, req, res, next) {
   });
 });
 
-// Database Listener for TvDisplay with auto-reconnection
+// Database Listener for PlayersMonitor with auto-reconnection
 const setupDbListener = async () => {
   let client;
   try {

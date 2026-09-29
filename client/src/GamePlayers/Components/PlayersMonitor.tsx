@@ -6,7 +6,7 @@ import DailyPlayers from './DailyPlayers';
 import TopPlayers from './TopPlayers';
 import { useRefresh } from '../../shared/Context/RefreshContext';
 
-const TvDisplay: React.FC = () => {
+const PlayersMonitor: React.FC = () => {
   const { refreshKey } = useRefresh();
 
   return (
@@ -31,4 +31,4 @@ const TvDisplay: React.FC = () => {
   );
 };
 
-export default TvDisplay;
+export default PlayersMonitor;

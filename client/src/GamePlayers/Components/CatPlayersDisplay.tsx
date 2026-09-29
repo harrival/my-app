@@ -84,29 +84,21 @@ const CatPlayersDisplay: React.FC = () => {
 
   const fetchPlayers = useCallback(async () => {
     try {
+      const dbObject = {
+        tableName: "game_players_table",
+        puzzle_type: 'CAT',
+        game_status: ['Created', 'In_progress'],
+        limit: 20,
+        business: profile?.business,
+        rep_id: profile?.rep_id,
+        played_date: new Date().toISOString().split('T')[0],
+        sortBy: "time_created",
+        sortDir: "ASC"
+      }
       const response = await axios.get<Player[]>(`${BASE_URL}/getAll/`, {
-        params: {
-          tableName: "game_players_table",
-          puzzle_type: 'CAT',
-          game_status: ['Created', 'In_progress'],
-          limit: 20,
-          business: profile?.business,
-          rep: profile?.user_guid,
-        }
+        params: dbObject
       });
-      const cats = response.data
-        .sort((a, b) => {
-          if (a.game_status === 'In_progress' && b.game_status !== 'In_progress') return -1;
-          if (b.game_status === 'In_progress' && a.game_status !== 'In_progress') return 1;
-
-          const queA = a.id;
-          const queB = b.id;
-          if (queA === null && queB === null) return 0;
-          if (queA === null) return 1;
-          if (queB === null) return -1;
-          return queA - queB;
-        });
-      setPlayers(cats);
+      setPlayers(response.data);
     } catch (error) {
       console.error('Error fetching cat players:', error);
     }

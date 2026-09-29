@@ -13,6 +13,7 @@ interface PuzzleFormProps {
   setAllPlayers: React.Dispatch<React.SetStateAction<Player[]>>;
   agentGuid: string | undefined | null;
   currentEvent: string | undefined | null;
+  business: string | undefined | null;
 }
 
 // Define types for form state
@@ -29,7 +30,7 @@ interface FormErrors {
   puzzlePet: string;
 }
 
-const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers, agentGuid, currentEvent }: PuzzleFormProps) => {
+const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers, agentGuid, currentEvent, business }: PuzzleFormProps) => {
   const [formState, setFormState] = useState<FormState>({
     contact: '',
     username: '',
@@ -128,6 +129,7 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers, agentGuid, current
         played_date: new Date().toISOString().split('T')[0],
         time_created: new Date().toISOString(),
         time_modified,
+        business: business,
         rep_id: agentGuid,
         event_id: currentEvent,
       };
