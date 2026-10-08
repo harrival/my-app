@@ -143,6 +143,7 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers, agentGuid, current
         const response = await axios.post(`${BASE_URL}/addToTable`, dbObject);
         if (response.status === 201) {
           setAllPlayers((prev) => [...prev, { ...newPlayer, game_status: 'Created' }]);
+          setShowPuzzleForm(false);
           resetForm();
         }
       } catch (error) {
@@ -169,59 +170,51 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers, agentGuid, current
     resetForm();
   };
 
-  const inputGroupStyle: React.CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    marginBottom: '1rem',
-    textAlign: 'left'
-  };
-
-  const errorStyle: React.CSSProperties = {
-    color: 'red',
-    fontSize: '0.8rem',
-    margin: '4px 0 0 0'
-  };
-
   return (
-    <form onSubmit={handleSubmit} className="puzzleForm">
-      <div className="input-group" style={inputGroupStyle}>
-        <label htmlFor="contact">Contact</label>
-        <input
-          id="contact"
-          type="text"
-          placeholder="Enter phone or email"
-          value={formState.contact}
-          onChange={handleInputChange}
-        />
-        {errors.contact && <p style={errorStyle}>{errors.contact}</p>}
+    <form onSubmit={handleSubmit} className="puzzleForm" autoComplete="off">
+      <div className="input-group">
+        <label htmlFor="contact">Contact:</label>
+        <div className="input-wrapper">
+          <input
+            id="contact"
+            type="text"
+            placeholder="Enter phone or email"
+            value={formState.contact}
+            onChange={handleInputChange}
+            autoComplete="off"
+          />
+          {errors.contact && <p className="error-message">{errors.contact}</p>}
+        </div>
       </div>
-
-      <div className="input-group" style={inputGroupStyle}>
-        <label htmlFor="username">Username</label>
-        <input
-          id="username"
-          type="text"
-          placeholder="Enter username"
-          value={formState.username}
-          onChange={handleInputChange}
-        />
-        {errors.username && <p style={errorStyle}>{errors.username}</p>}
+      <div className="input-group">
+        <label htmlFor="username">Username:</label>
+        <div className="input-wrapper">
+          <input
+            id="username"
+            type="text"
+            placeholder="Enter username"
+            value={formState.username}
+            onChange={handleInputChange}
+            autoComplete="off"
+          />
+          {errors.username && <p className="error-message">{errors.username}</p>}
+        </div>
       </div>
-
-      <div className="input-group" style={inputGroupStyle}>
-        <label htmlFor="puzzlePet">Puzzle pet</label>
-        <select
-          id="puzzlePet"
-          value={formState.puzzlePet}
-          onChange={handleSelectChange}
-        >
-          <option value="">Select a pet</option>
-          <option value="CAT">Cat</option>
-          <option value="DOG">Dog</option>
-        </select>
-        {errors.puzzlePet && <p style={errorStyle}>{errors.puzzlePet}</p>}
+      <div className="input-group">
+        <label htmlFor="puzzlePet">Puzzle pet:</label>
+        <div className="input-wrapper">
+          <select
+            id="puzzlePet"
+            value={formState.puzzlePet}
+            onChange={handleSelectChange}
+          >
+            <option value="">Select a pet</option>
+            <option value="CAT">Cat</option>
+            <option value="DOG">Dog</option>
+          </select>
+          {errors.puzzlePet && <p className="error-message">{errors.puzzlePet}</p>}
+        </div>
       </div>
-
       <div className="button-group">
         <button className="addPlayerBtn" type="submit">
           Submit

@@ -68,7 +68,6 @@ CREATE TABLE IF NOT EXISTS game_players_table (
     time_ended TIME,
     time_used TIME,
     time_used_in_sec INTEGER,
-    player_que_number INTEGER,
     time_created TIMESTAMP,
     time_modified TIMESTAMP,
     rep_id VARCHAR(50),

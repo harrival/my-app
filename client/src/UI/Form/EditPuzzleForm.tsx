@@ -164,41 +164,49 @@ const EditPuzzleForm = ({
     };
 
     return (
-        <form onSubmit={handleEditPuzzleForm} className="puzzleForm">
+        <form onSubmit={handleEditPuzzleForm} className="puzzleForm" autoComplete="off">
             <div className="input-group">
-                <label htmlFor="contact">Contact</label>
-                <input
-                    id="contact"
-                    type="text"
-                    placeholder="Enter phone or email"
-                    value={formState.contact}
-                    onChange={handleInputChange}
-                />
-                {errors.contact && <p>{errors.contact}</p>}
+                <label htmlFor="contact">Contact:</label>
+                <div className="input-wrapper">
+                    <input
+                        id="contact"
+                        type="text"
+                        placeholder="Enter phone or email"
+                        value={formState.contact}
+                        onChange={handleInputChange}
+                        autoComplete="off"
+                    />
+                    {errors.contact && <p className="error-message">{errors.contact}</p>}
+                </div>
             </div>
             <div className="input-group">
-                <label htmlFor="username">Username</label>
-                <input
-                    id="username"
-                    type="text"
-                    placeholder="Enter username"
-                    value={formState.username}
-                    onChange={handleInputChange}
-                />
-                {errors.username && <p>{errors.username}</p>}
+                <label htmlFor="username">Username:</label>
+                <div className="input-wrapper">
+                    <input
+                        id="username"
+                        type="text"
+                        placeholder="Enter username"
+                        value={formState.username}
+                        onChange={handleInputChange}
+                        autoComplete="off"
+                    />
+                    {errors.username && <p className="error-message">{errors.username}</p>}
+                </div>
             </div>
             <div className="input-group">
-                <label htmlFor="puzzlePet">Puzzle pet</label>
-                <select
-                    id="puzzlePet"
-                    value={formState.puzzlePet}
-                    onChange={handleSelectChange}
-                >
-                    <option value="">Select a pet</option>
-                    <option value="CAT">Cat</option>
-                    <option value="DOG">Dog</option>
-                </select>
-                {errors.puzzlePet && <p>{errors.puzzlePet}</p>}
+                <label htmlFor="puzzlePet">Puzzle pet:</label>
+                <div className="input-wrapper">
+                    <select
+                        id="puzzlePet"
+                        value={formState.puzzlePet}
+                        onChange={handleSelectChange}
+                    >
+                        <option value="">Select a pet</option>
+                        <option value="CAT">Cat</option>
+                        <option value="DOG">Dog</option>
+                    </select>
+                    {errors.puzzlePet && <p className="error-message">{errors.puzzlePet}</p>}
+                </div>
             </div>
             <div className="button-group">
                 <button className="addPlayerBtn" type="submit">

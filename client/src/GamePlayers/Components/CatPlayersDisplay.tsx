@@ -24,7 +24,7 @@ const RowTimer: React.FC<{ timeStarted: string }> = ({ timeStarted }) => {
 
     const getElapsed = () => {
       const now = new Date();
-      const nowInSecs = now.getUTCHours() * 3600 + now.getUTCMinutes() * 60 + now.getUTCSeconds();
+      const nowInSecs = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
       let diff = nowInSecs - startTimeInSecs;
       if (diff < -43200) diff += 86400;
       else if (diff > 43200) diff -= 86400;
@@ -139,19 +139,7 @@ const CatPlayersDisplay: React.FC = () => {
         } else {
           updatedList = [...prevPlayers, player];
         }
-
-        // Sort the list so In_progress is first, and others by queue number
-        return updatedList.sort((a, b) => {
-          if (a.game_status === 'In_progress' && b.game_status !== 'In_progress') return -1;
-          if (b.game_status === 'In_progress' && a.game_status !== 'In_progress') return 1;
-
-          const queA = a.id;
-          const queB = b.id;
-          if (queA === null && queB === null) return 0;
-          if (queA === null) return 1;
-          if (queB === null) return -1;
-          return queA - queB;
-        });
+        return updatedList
       });
     };
 
@@ -193,7 +181,7 @@ const CatPlayersDisplay: React.FC = () => {
               }
             >
               <td>
-                <span> {player.id}</span>
+                <span> {index + 1}</span>
               </td>
               <td>{player.username}</td>
               <td>

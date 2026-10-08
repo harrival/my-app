@@ -110,11 +110,30 @@ router.get("/getOne", async function (req, res, next) {
     const filterKeys = Object.keys(filters);
 
     if (filterKeys.length > 0) {
-      const whereClauses = filterKeys.map((key, idx) => {
-        queryParams.push(filters[key]);
-        return `${key} = $${idx + 1}`;
-      });
-      query += ` WHERE ${whereClauses.join(" AND ")}`;
+      const whereClauses = [];
+
+      for (const key of filterKeys) {
+        const value = filters[key];
+        if (Array.isArray(value)) {
+          if (value.length >= 2) {
+            const orConditions = value.map((val) => {
+              queryParams.push(val);
+              return `${key} = $${queryParams.length}`;
+            });
+            whereClauses.push(`(${orConditions.join(" OR ")})`);
+          } else if (value.length === 1) {
+            queryParams.push(value[0]);
+            whereClauses.push(`${key} = $${queryParams.length}`);
+          }
+        } else {
+          queryParams.push(value);
+          whereClauses.push(`${key} = $${queryParams.length}`);
+        }
+      }
+
+      if (whereClauses.length > 0) {
+        query += ` WHERE ${whereClauses.join(" AND ")}`;
+      }
     }
 
     query += " LIMIT 1";

@@ -32,9 +32,16 @@ io.on('connection', (socket) => {
   });
 });
 
+const allowedOrigins = [
+  'https://my-app-frontend-production-34ef.up.railway.app',
+  'https://camerastopwatch-production.up.railway.app',
+  'http://localhost:3000',
+  'http://localhost:5173'
+];
+
 app.use(express.json());
 app.use(cors({
-  origin: 'https://my-app-frontend-production-34ef.up.railway.app', // Your frontend domain
+  origin: allowedOrigins,
   credentials: true
 }));
 app.use(middleware.logger);
@@ -137,7 +144,6 @@ const migrateDb = async () => {
       ALTER TABLE puzzles_type ADD COLUMN IF NOT EXISTS business VARCHAR(100);
       ALTER TABLE reps_table ADD COLUMN IF NOT EXISTS business VARCHAR(100);
       ALTER TABLE game_players_table ADD COLUMN IF NOT EXISTS business VARCHAR(100);
-      ALTER TABLE que_number_table ADD COLUMN IF NOT EXISTS business VARCHAR(100);
 
       CREATE OR REPLACE FUNCTION notify_game_players_changes() RETURNS trigger AS $$
       DECLARE

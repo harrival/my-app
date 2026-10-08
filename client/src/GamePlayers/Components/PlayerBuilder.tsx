@@ -10,6 +10,11 @@ import { type Player } from './PlayerInterface';
 import { BASE_URL } from '../../shared/Utils/apiConfig';
 import { useUserProfile } from '../../shared/Context/UserProfileContext';
 
+const isInProgress = (status?: string | null): boolean => {
+  if (!status) return false;
+  return status.toLowerCase().replace(/[\s_-]+/g, '') === 'inprogress';
+};
+
 const PlayerBuilder: React.FC = () => {
   const { profile } = useUserProfile();
   const { refreshKey } = useRefresh();
@@ -29,12 +34,14 @@ const PlayerBuilder: React.FC = () => {
   }, [allPlayers]);
 
   useEffect(() => {
+    console.log('refreshKey in player builder', refreshKey);
     const fetchUsers = async () => {
       const dbObject = {
         tableName: "game_players_table",
         ...(profile?.rep_id && { rep_id: profile.rep_id }),
         // ...(profile?.permission_group === 'Supervisor' && { business: profile.business }),
         played_date: new Date().toISOString().split('T')[0],
+        sortBy: "time_created",
       };
       try {
         const response = await axios.get<Player[]>(`${BASE_URL}/getAll/`, { params: dbObject });
@@ -45,7 +52,7 @@ const PlayerBuilder: React.FC = () => {
     };
 
     fetchUsers();
-  }, [refreshKey, profile?.rep_id]); // Now updates automatically when any view changes the DB
+  }, [allPlayers, profile?.rep_id]); // Now updates automatically when any view changes the DB
 
   const showPuzzleFormHandler = () => {
     setShowPuzzleForm(!showPuzzleForm);
@@ -112,6 +119,7 @@ const PlayerBuilder: React.FC = () => {
         <input
           type="text"
           placeholder="Search players..."
+          autoComplete="off"
           onChange={(e) => searchPlayersHandler(e.target.value)}
         />
       </div>
@@ -157,7 +165,7 @@ const PlayerBuilder: React.FC = () => {
                     {player.username}
                   </td>
                   <td>
-                    {player.game_status !== 'In_progress' && (
+                    {!isInProgress(player.game_status) && (
                       <>
                         <span
                           className={classes.editPlayer}
@@ -200,7 +208,7 @@ const PlayerBuilder: React.FC = () => {
                     {player.username}
                   </td>
                   <td>
-                    {player.game_status !== 'In_progress' && (
+                    {!isInProgress(player.game_status) && (
                       <>
                         <span
                           className={classes.editPlayer}
