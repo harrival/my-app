@@ -37,9 +37,18 @@ const DailyPlayers = () => {
     }, [fetchUsers]);
 
     useEffect(() => {
-        if (!socket || !profile?.business) return;
+        if (!socket) return;
 
-        socket.emit('join_business_room', profile.business);
+        if (profile?.business) {
+            socket.emit('join_business_room', profile.business);
+        }
+        if (profile?.rep_id) {
+            socket.emit('join_rep_room', profile.rep_id);
+        }
+
+        const handleUpdated = () => {
+            fetchUsers();
+        };
 
         const handleDelta = (event: { operation: string, player: Player }) => {
             // Refetch when a player is completed or deleted
@@ -48,11 +57,13 @@ const DailyPlayers = () => {
             }
         };
 
+        socket.on('game_players_updated', handleUpdated);
         socket.on('game_players_delta', handleDelta);
         return () => {
+            socket.off('game_players_updated', handleUpdated);
             socket.off('game_players_delta', handleDelta);
         };
-    }, [socket, profile?.business, fetchUsers]);
+    }, [socket, profile?.business, profile?.rep_id, fetchUsers]);
 
     return (
         <div className={classes.centeredContainer}>

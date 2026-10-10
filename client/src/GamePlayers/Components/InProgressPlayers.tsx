@@ -20,13 +20,36 @@ const InProgressPlayers: React.FC<InProgressPlayersProps> = ({
   const [isRunning, setIsRunning] = useState<boolean>(false);
 
   const calculateElapsedSeconds = useCallback((startTimeStr: string) => {
-    const [hrs, mins, secs] = startTimeStr.split(':').map(Number);
+    if (!startTimeStr || startTimeStr === '00:00:00') return 0;
+    const timeMatch = startTimeStr.match(/(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
+    if (!timeMatch) return 0;
+    let hrs = parseInt(timeMatch[1], 10);
+    const mins = parseInt(timeMatch[2], 10);
+    const secs = timeMatch[3] ? parseInt(timeMatch[3], 10) : 0;
+    if (isNaN(hrs) || isNaN(mins)) return 0;
+
+    const lowerStr = startTimeStr.toLowerCase();
+    if (lowerStr.includes('pm') && hrs < 12) hrs += 12;
+    if (lowerStr.includes('am') && hrs === 12) hrs = 0;
+
+    const startSecOfDay = hrs * 3600 + mins * 60 + secs;
     const now = new Date();
-    const start = new Date();
-    start.setHours(hrs, mins, secs, 0);
-    
-    const diff = Math.floor((now.getTime() - start.getTime()) / 1000);
-    return diff > 0 ? diff : 0;
+    const nowLocalSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
+    const nowUtcSec = now.getUTCHours() * 3600 + now.getUTCMinutes() * 60 + now.getUTCSeconds();
+
+    let diffLocal = nowLocalSec - startSecOfDay;
+    if (diffLocal < -43200) diffLocal += 86400;
+    else if (diffLocal > 43200) diffLocal -= 86400;
+
+    let diffUtc = nowUtcSec - startSecOfDay;
+    if (diffUtc < -43200) diffUtc += 86400;
+    else if (diffUtc > 43200) diffUtc -= 86400;
+
+    const candidates: number[] = [];
+    if (diffLocal >= 0) candidates.push(diffLocal);
+    if (diffUtc >= 0) candidates.push(diffUtc);
+
+    return candidates.length > 0 ? Math.min(...candidates) : 0;
   }, []);
 
   useEffect(() => {

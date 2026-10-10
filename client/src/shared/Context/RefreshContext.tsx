@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { io } from 'socket.io-client';
-import { BASE_URL } from '../../shared/Utils/apiConfig'; // Import BASE_URL
+import { getResolvedBaseUrl } from '../../shared/Utils/apiConfig';
 
 interface RefreshContextType {
   refreshKey: number;
@@ -14,11 +14,14 @@ export const RefreshProvider: React.FC<{ children: ReactNode }> = ({ children })
   const [socket, setSocket] = useState<any>(null);
 
   useEffect(() => {
+    const targetUrl = getResolvedBaseUrl();
+    const isSecure = targetUrl.startsWith('https://');
+
     // Centralized socket connection with path definition
-    const socketInstance = io(BASE_URL, {
+    const socketInstance = io(targetUrl, {
       path: '/socket.io/', // Tells the client to match the backend path structure
       transports: ['websocket', 'polling'],
-      secure: true, // Forces secure production connections over HTTPS/WSS
+      secure: isSecure,
       reconnection: true
     });
 

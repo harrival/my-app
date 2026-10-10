@@ -84,36 +84,45 @@ const CatPlayersDisplay: React.FC = () => {
 
   const fetchPlayers = useCallback(async () => {
     try {
-      const dbObject = {
+      const dbObject: Record<string, any> = {
         tableName: "game_players_table",
         puzzle_type: 'CAT',
         game_status: ['Created', 'In_progress'],
         limit: 20,
-        business: profile?.business,
-        rep_id: profile?.rep_id,
         played_date: new Date().toISOString().split('T')[0],
         sortBy: "time_created",
         sortDir: "ASC"
-      }
+      };
+      if (profile?.business) dbObject.business = profile.business;
+      if (profile?.rep_id) dbObject.rep_id = profile.rep_id;
+
       const response = await axios.get<Player[]>(`${BASE_URL}/getAll/`, {
         params: dbObject
       });
-      setPlayers(response.data);
+      setPlayers(response.data || []);
     } catch (error) {
       console.error('Error fetching cat players:', error);
     }
-  }, []);
+  }, [profile?.business, profile?.rep_id]);
 
   useEffect(() => {
     fetchPlayers();
   }, [fetchPlayers]);
 
-  // Handle namespaced real-time updates (delta mapping)
+  // Handle namespaced real-time updates (delta mapping + full update broadcast)
   useEffect(() => {
-    if (!socket || !profile?.business) return;
+    if (!socket) return;
 
-    // Join room for this business location
-    socket.emit('join_business_room', profile.business);
+    if (profile?.business) {
+      socket.emit('join_business_room', profile.business);
+    }
+    if (profile?.rep_id) {
+      socket.emit('join_rep_room', profile.rep_id);
+    }
+
+    const handleUpdated = () => {
+      fetchPlayers();
+    };
 
     const handleDelta = (event: { operation: string, player: Player }) => {
       // Check if it belongs to this table's puzzle type
@@ -139,15 +148,17 @@ const CatPlayersDisplay: React.FC = () => {
         } else {
           updatedList = [...prevPlayers, player];
         }
-        return updatedList
+        return updatedList;
       });
     };
 
+    socket.on('game_players_updated', handleUpdated);
     socket.on('game_players_delta', handleDelta);
     return () => {
+      socket.off('game_players_updated', handleUpdated);
       socket.off('game_players_delta', handleDelta);
     };
-  }, [socket, profile?.business]);
+  }, [socket, profile?.business, profile?.rep_id, fetchPlayers]);
 
   const hasInProgress = players.some(p => p.game_status === 'In_progress');
 

@@ -14,6 +14,7 @@ interface PuzzleFormProps {
   agentGuid: string | undefined | null;
   currentEvent: string | undefined | null;
   business: string | undefined | null;
+  onPlayerCreated?: (player: Player) => void;
 }
 
 // Define types for form state
@@ -30,7 +31,7 @@ interface FormErrors {
   puzzlePet: string;
 }
 
-const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers, agentGuid, currentEvent, business }: PuzzleFormProps) => {
+const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers, agentGuid, currentEvent, business, onPlayerCreated }: PuzzleFormProps) => {
   const [formState, setFormState] = useState<FormState>({
     contact: '',
     username: '',
@@ -142,9 +143,13 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers, agentGuid, current
 
         const response = await axios.post(`${BASE_URL}/addToTable`, dbObject);
         if (response.status === 201) {
-          setAllPlayers((prev) => [...prev, { ...newPlayer, game_status: 'Created' }]);
+          const createdPlayer: Player = { ...newPlayer, game_status: 'Created' };
+          setAllPlayers((prev) => [...prev, createdPlayer]);
           setShowPuzzleForm(false);
           resetForm();
+          if (onPlayerCreated) {
+            onPlayerCreated(createdPlayer);
+          }
         }
       } catch (error) {
         console.error('Error adding player:', error);

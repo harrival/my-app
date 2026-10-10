@@ -59,17 +59,59 @@
 .borderedTable th {
     background-color: #f2f2f2;
 }
-.editPlayer {
-    cursor: pointer;
-    color: blue;
-    text-decoration: underline;
-    margin: '10%'
+.actionGroup {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
-.deletePlayer {
+
+.actionIconBtn {
+    background: transparent;
+    border: none;
+    padding: 6px;
+    border-radius: 6px;
     cursor: pointer;
-    color: red;
-    text-decoration: underline;
-    margin-left:40%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.05rem;
+    line-height: 1;
+    transition: all 0.15s ease;
+
+    &:hover {
+        transform: scale(1.18);
+    }
+
+    &:active {
+        transform: scale(0.95);
+    }
+}
+
+.editPlayer {
+    color: #2563eb;
+
+    &:hover {
+        background-color: rgba(37, 99, 235, 0.12);
+        color: #1d4ed8;
+    }
+}
+
+.printPlayer {
+    color: #16a34a;
+
+    &:hover {
+        background-color: rgba(22, 163, 74, 0.12);
+        color: #15803d;
+    }
+}
+
+.deletePlayer {
+    color: #dc2626;
+
+    &:hover {
+        background-color: rgba(220, 38, 38, 0.12);
+        color: #b91c1c;
+    }
 }
 
 .highlight {

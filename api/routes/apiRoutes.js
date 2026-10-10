@@ -427,4 +427,101 @@ router.get("/active-profile/:business", function (req, res, next) {
   }
 });
 
+// ==========================================
+// WhatsApp-Style Device Linking Endpoints
+// ==========================================
+const deviceLinkService = require("../services/deviceLinkService");
+
+/** Secondary device requests a link ticket (shows QR code and pair code) */
+router.post("/device-link/ticket", function (req, res, next) {
+  try {
+    const ticket = deviceLinkService.createTicket(req.body);
+    return res.json(ticket);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/** Check status of a pairing ticket */
+router.get("/device-link/ticket/:id", function (req, res, next) {
+  try {
+    const ticket = deviceLinkService.findTicket(req.params.id);
+    if (!ticket) {
+      return res.status(404).json({ error: "Ticket not found or expired" });
+    }
+    return res.json(ticket);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/** Primary device (logged in) approves the device link */
+router.post("/device-link/approve", function (req, res, next) {
+  try {
+    const { identifier, userGuid, deviceName, userProfile, deviceType } = req.body;
+    if (!identifier || !userGuid) {
+      return res.status(400).json({ error: "Missing identifier or userGuid" });
+    }
+    // Prevent child/linked devices from approving other devices
+    if (userProfile?.isLinkedDevice) {
+      return res.status(403).json({ error: "Linked (child) devices cannot authorize other devices." });
+    }
+    const result = deviceLinkService.approveTicket({
+      identifier,
+      userGuid,
+      deviceName,
+      userProfile,
+      deviceType,
+    });
+    return res.json(result);
+  } catch (err) {
+    return res.status(400).json({ error: err.message });
+  }
+});
+
+/** Linked device activity heartbeat (resets 1-hour inactivity timer) */
+router.post("/device-link/touch", function (req, res, next) {
+  try {
+    const { deviceId } = req.body;
+    const status = deviceLinkService.touchActivity(deviceId);
+    return res.json(status);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/** Check if a device session is still active (used by child devices) */
+router.get("/device-link/status/:deviceId", function (req, res, next) {
+  try {
+    const active = deviceLinkService.isDeviceActive(req.params.deviceId);
+    return res.json({ active });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/** Get all currently active linked devices for a user */
+router.get("/device-link/devices/:userGuid", function (req, res, next) {
+  try {
+    if (req.headers["x-is-linked-device"] === "true") {
+      return res.status(403).json({ error: "Linked devices cannot view linked device list." });
+    }
+    const devices = deviceLinkService.getLinkedDevices(req.params.userGuid);
+    return res.json(devices);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/** Primary device revokes/logs out a linked device */
+router.delete("/device-link/device/:userGuid/:deviceId", function (req, res, next) {
+  try {
+    const { userGuid, deviceId } = req.params;
+    const success = deviceLinkService.revokeDevice(userGuid, deviceId);
+    return res.json({ success });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 module.exports = router;

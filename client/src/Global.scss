@@ -13,3 +13,21 @@
 hr {
     margin: 0;
 }
+
+/* 10-Foot Television Remote Focus State */
+:focus-visible,
+:focus {
+    outline: 3px solid #16a34a !important;
+    outline-offset: 3px !important;
+    transform: scale(1.02);
+    transition: transform 0.15s ease, outline 0.15s ease;
+    box-shadow: 0 0 14px rgba(22, 163, 74, 0.45) !important;
+}
+
+body.tv-device {
+    /* Hide mouse cursor when on smart TV/Fire TV for native console look */
+    cursor: default;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: manipulation;
+}

@@ -12,18 +12,20 @@ const TopPlayer: React.FC = () => {
   const [topPlayers, setTopPlayers] = useState<Player[]>([]);
 
   const fetchTopPlayers = useCallback(async () => {
-    if (!profile?.rep_id) return;
-    const dbObject = {
+    if (!profile?.rep_id && !profile?.business) return;
+    const dbObject: Record<string, any> = {
       tableName: 'game_players_table',
       limit: 3,
       sortBy: 'time_used_in_sec',
       sortDir: 'ASC',
-      rep_id: profile?.rep_id,
       game_status: "Completed",
       played_date: new Date().toISOString().split('T')[0]
-    }
+    };
+    if (profile?.rep_id) dbObject.rep_id = profile.rep_id;
+    else if (profile?.business) dbObject.business = profile.business;
+
     try {
-      // Fetching top 10 completed players sorted by fastest time
+      // Fetching top 3 completed players sorted by fastest time
       const response = await axios.get<Player[]>(`${BASE_URL}/getAll`, {
         params: dbObject
       });
@@ -31,16 +33,25 @@ const TopPlayer: React.FC = () => {
     } catch (error) {
       console.error('Error fetching top players:', error);
     }
-  }, [profile?.rep_id]);
+  }, [profile?.rep_id, profile?.business]);
 
   useEffect(() => {
     fetchTopPlayers();
   }, [fetchTopPlayers]);
 
   useEffect(() => {
-    if (!socket || !profile?.rep_id) return;
+    if (!socket) return;
 
-    socket.emit('join_rep_room', profile.rep_id);
+    if (profile?.rep_id) {
+      socket.emit('join_rep_room', profile.rep_id);
+    }
+    if (profile?.business) {
+      socket.emit('join_business_room', profile.business);
+    }
+
+    const handleUpdated = () => {
+      fetchTopPlayers();
+    };
 
     const handleDelta = (event: { operation: string, player: Player }) => {
       // Refetch when a player is completed or deleted
@@ -49,11 +60,13 @@ const TopPlayer: React.FC = () => {
       }
     };
 
+    socket.on('game_players_updated', handleUpdated);
     socket.on('game_players_delta', handleDelta);
     return () => {
+      socket.off('game_players_updated', handleUpdated);
       socket.off('game_players_delta', handleDelta);
     };
-  }, [socket, profile?.rep_id, fetchTopPlayers]);
+  }, [socket, profile?.rep_id, profile?.business, fetchTopPlayers]);
 
   return (
     <div className={classes.staticTableContainer}>

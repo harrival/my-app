@@ -8,7 +8,7 @@ import { useRefresh } from '../../shared/Context/RefreshContext';
 
 const PlayersMonitor: React.FC = () => {
   const { refreshKey } = useRefresh();
-  console.log('refreshKey in players monitor', refreshKey);
+
   // This is a no-scroll display page: lock document scroll while mounted
   useEffect(() => {
     const prevHtml = document.documentElement.style.overflow;

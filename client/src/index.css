@@ -12,3 +12,112 @@ code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
 }
+
+/* ==========================================================================
+   Thermal / Badge Print Stylesheet (Scaled to Fill Label Width)
+   ========================================================================== */
+@media print {
+  @page {
+    size: auto;
+    margin: 0;
+  }
+
+  html,
+  body {
+    width: 100% !important;
+    height: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+    background-image: none !important;
+    overflow: hidden !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Hide everything on the webpage by default */
+  body * {
+    visibility: hidden !important;
+  }
+
+  /* Make only the player badge and its contents visible */
+  .printable-player-badge,
+  .printable-player-badge * {
+    visibility: visible !important;
+  }
+
+  /* Scale to fill the full width of the thermal label, centered */
+  .printable-player-badge {
+    position: fixed !important;
+    left: 4% !important;
+    top: 3% !important;
+    width: 92% !important;
+    max-width: 92% !important;
+    box-sizing: border-box !important;
+    margin: 0 !important;
+    padding: 16px 20px !important;
+    border: 3px dashed #000000 !important;
+    border-radius: 12px !important;
+    background: #ffffff !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    text-align: center !important;
+    overflow: hidden !important;
+    page-break-inside: avoid !important;
+    z-index: 999999 !important;
+  }
+
+  .printable-player-badge .badge-title {
+    font-size: 16px !important;
+    font-weight: 900 !important;
+    letter-spacing: 2px !important;
+    text-transform: uppercase !important;
+    color: #000000 !important;
+    margin: 0 0 8px 0 !important;
+    line-height: 1.2 !important;
+  }
+
+  .printable-player-badge .badge-qr {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin: 6px 0 !important;
+    padding: 0 !important;
+  }
+
+  .printable-player-badge .badge-qr svg {
+    display: block !important;
+    margin: 0 auto !important;
+    width: 2.35in !important;
+    height: 2.35in !important;
+    max-width: 72vw !important;
+    max-height: 72vw !important;
+  }
+
+  .printable-player-badge .badge-username {
+    font-size: 26px !important;
+    font-weight: 900 !important;
+    line-height: 1.2 !important;
+    letter-spacing: 0.5px !important;
+    color: #000000 !important;
+    margin: 8px 0 6px 0 !important;
+    word-break: break-all !important;
+    max-width: 92% !important;
+  }
+
+  .printable-player-badge .badge-type {
+    font-size: 14px !important;
+    font-weight: 900 !important;
+    text-transform: uppercase !important;
+    color: #000000 !important;
+    letter-spacing: 1px !important;
+    background: transparent !important;
+    border: 2px solid #000000 !important;
+    border-radius: 6px !important;
+    padding: 3px 14px !important;
+    line-height: 1.2 !important;
+    margin: 0 !important;
+  }
+}

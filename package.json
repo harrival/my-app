@@ -5,7 +5,12 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "nodemon api/app.js",
-    "start": "node api/app.js"
+    "start": "node api/app.js",
+    "web": "npm --prefix client start",
+    "build": "npm --prefix client run build",
+    "cap:sync": "npm --prefix client run cap:sync",
+    "cap:ios": "npm --prefix client run cap:ios",
+    "cap:android": "npm --prefix client run cap:android"
   },
   "repository": {
     "type": "git",

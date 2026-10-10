@@ -1,7 +1,15 @@
 declare var process: { env: { [key: string]: string | undefined } };
 
-const BASE_URL: string = process.env.REACT_APP_API_URL || 'http://localhost:5001';
+const getResolvedBaseUrl = (): string => {
+  if (process.env.REACT_APP_API_URL && process.env.REACT_APP_API_URL.trim()) {
+    return process.env.REACT_APP_API_URL.trim().replace(/\/+$/, '');
+  }
 
-console.log(BASE_URL, "API URL")
+  return 'https://my-app-frontend-production-34ef.up.railway.app';
+};
 
-export { BASE_URL };
+const BASE_URL: string = getResolvedBaseUrl();
+
+console.log(BASE_URL, "API URL");
+
+export { BASE_URL, getResolvedBaseUrl };

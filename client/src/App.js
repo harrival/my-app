@@ -1,6 +1,5 @@
 import React, { useState, useCallback } from 'react';
 import axios from 'axios';
-import { BASE_URL } from './shared/Utils/apiConfig';
 
 import Header from './Header/Header';
 import Router from './shared/Router/Router';
@@ -9,6 +8,7 @@ import { AuthContext } from './shared/Context/auth-context';
 // Import your RefreshProvider here
 import { RefreshProvider } from './shared/Context/RefreshContext';
 import { UserProfileProvider } from './shared/Context/UserProfileContext';
+import { useTVNavigation } from './shared/Hooks/useTVNavigation';
 
 import './CSSVars.scss';
 import './Global.scss';
@@ -63,15 +63,18 @@ function App() {
 
   const showModalHandler = () => setShowModal(true);
 
+  // Enable 10-foot TV Remote D-Pad Navigation across the app
+  useTVNavigation();
+
   return (
     <div style={{ background: color, minHeight: '100vh', paddingBottom: '25px', overflowX: 'hidden' }}>
       <AuthContext.Provider value={{ isLoggedIn, login, logout }}>
-        <UserProfileProvider>
-          <RefreshProvider>
+        <RefreshProvider>
+          <UserProfileProvider>
             <Header onShowModal={showModalHandler} setColor={setColor} />
             <Router />
-          </RefreshProvider>
-        </UserProfileProvider>
+          </UserProfileProvider>
+        </RefreshProvider>
       </AuthContext.Provider>
     </div>
   );

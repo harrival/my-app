@@ -10,7 +10,7 @@ const ExpressError = require("./expressError");
 
 const app = express();
 const server = http.createServer(app);
-// import BASE_URL from 
+
 // Initialize Socket.io with robust settings for multi-device testing
 const io = new Server(server, {
   cors: {
@@ -22,10 +22,36 @@ const io = new Server(server, {
   path: "/socket.io/"
 });
 
-io.on('connection', (socket) => {
+const deviceLinkService = require('./services/deviceLinkService');
+deviceLinkService.setIo(io);
 
+io.on('connection', (socket) => {
   socket.on('join_rep_room', (repId) => {
     socket.join(repId);
+  });
+
+  socket.on('join_business_room', (business) => {
+    socket.join(business);
+  });
+
+  socket.on('join_ticket_room', (ticketId) => {
+    socket.join(`ticket_${ticketId}`);
+  });
+
+  socket.on('join_device_room', (deviceId) => {
+    socket.join(`device_${deviceId}`);
+  });
+
+  socket.on('join_user_room', (userGuid) => {
+    socket.join(`user_${userGuid}`);
+  });
+
+  socket.on('device_activity', (deviceId) => {
+    deviceLinkService.touchActivity(deviceId);
+  });
+
+  socket.on('game_players_changed', () => {
+    io.emit('game_players_updated');
   });
 
   socket.on('disconnect', () => {
@@ -34,28 +60,30 @@ io.on('connection', (socket) => {
 
 const allowedOrigins = [
   'https://my-app-frontend-production-34ef.up.railway.app',
-  'https://camerastopwatch-production.up.railway.app',
-  'http://localhost:3000',
-  'http://localhost:5173'
 ];
+
+if (process.env.CLIENT_URL) {
+  allowedOrigins.push(process.env.CLIENT_URL);
+}
 
 app.use(express.json());
 app.use(cors({
-  origin: allowedOrigins,
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    if (
+      allowedOrigins.includes(origin) ||
+      origin.endsWith('.up.railway.app')
+    ) {
+      return callback(null, true);
+    }
+    return callback(null, true);
+  },
   credentials: true
 }));
 app.use(middleware.logger);
 
 // Add routes from appServer.js
 app.get('/favicon.ico', (req, res) => res.sendStatus(204));
-
-app.get('/secret', middleware.checkForPassword, (req, res, next) => {
-  return res.send("I LOVE YOU <3 FOR REAL MARRY ME");
-});
-
-app.get('/private', middleware.checkForPassword, (req, res, next) => {
-  return res.send("YOU HAVE REACHED THE PRIVATE PAGE.  IT IS PRIVATE.");
-});
 
 // 2. GENERAL ROUTER (After specific routes to avoid 404 stealing)
 try {
@@ -96,19 +124,24 @@ const setupDbListener = async () => {
     client.on('notification', (msg) => {
       if (msg.channel === 'game_players_changes') {
         try {
+          // Always emit game_players_updated so that all monitors, TV screens, and builder components refresh!
+          io.emit('game_players_updated');
+
           if (!msg.payload) {
-            io.emit('game_players_updated');
             return;
           }
           const payload = JSON.parse(msg.payload);
           const { operation, data } = payload;
           const repId = data.rep_id;
+          const business = data.business;
 
+          if (business) {
+            io.to(business).emit('game_players_delta', { operation, player: data });
+          }
           if (repId) {
             io.to(repId).emit('game_players_delta', { operation, player: data });
-          } else {
-            io.emit('game_players_delta', { operation, player: data });
           }
+          io.emit('game_players_delta', { operation, player: data });
         } catch (err) {
           console.error("Error parsing PG notification payload:", err);
           io.emit('game_players_updated');
@@ -131,8 +164,6 @@ const setupDbListener = async () => {
 
 setupDbListener().catch((err) => {
   console.error('❌ Unhandled error in setupDbListener — DB listener will not be active:', err);
-  // Do not rethrow: the HTTP server should remain fully operational
-  // without real-time DB notifications.
 });
 
 // Database Migrations (Run on startup)
@@ -180,4 +211,5 @@ migrateDb();
 // IMPORTANT: Use server.listen, not app.listen
 const PORT = process.env.PORT || 5001;
 server.listen(PORT, '0.0.0.0', () => {
+  console.log(`Backend server running on port ${PORT}`);
 });

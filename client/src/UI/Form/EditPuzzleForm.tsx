@@ -17,6 +17,7 @@ interface EditPuzzleFormProps {
     puzzleState: Player[];
     updateCurrentPlayer: (updatedPuzzleState: Player[]) => void;
     setShowEditPuzzleForm: (show: boolean) => void;
+    onPlayerUpdated?: (updatedPlayer: Player) => void;
 }
 
 interface FormState {
@@ -36,6 +37,7 @@ const EditPuzzleForm = ({
     puzzleState,
     updateCurrentPlayer,
     setShowEditPuzzleForm,
+    onPlayerUpdated,
 }: EditPuzzleFormProps) => {
     const [formState, setFormState] = useState<FormState>({
         contact: player.email || player.phone_number || '',
@@ -127,10 +129,19 @@ const EditPuzzleForm = ({
                 );
 
                 if (response.status === 200) {
+                    const updatedPlayerObj: Player = { ...player, ...editedPlayer };
                     const updatedPuzzleState = puzzleState.map((p) =>
                         p.player_guid === player.player_guid ? { ...p, ...editedPlayer } : p
                     );
                     updateCurrentPlayer(updatedPuzzleState);
+
+                    const qrDetailsChanged =
+                        formState.username !== player.username ||
+                        formState.puzzlePet !== player.puzzle_type;
+
+                    if (qrDetailsChanged && onPlayerUpdated) {
+                        onPlayerUpdated(updatedPlayerObj);
+                    }
                 }
             } catch (error) {
                 console.error('Error updating player playTime:', error);

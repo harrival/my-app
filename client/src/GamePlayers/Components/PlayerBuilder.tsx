@@ -5,10 +5,12 @@ import classes from '../Styles/PlayerBuilder.module.scss';
 import PlayerPuzzleForm from '../../UI/Form/PlayerPuzzleForm';
 import EditPuzzleForm from '../../UI/Form/EditPuzzleForm';
 import axios from 'axios';
+import { FaPencilAlt, FaPrint, FaTrash } from 'react-icons/fa';
 import { useRefresh } from '../../shared/Context/RefreshContext';
 import { type Player } from './PlayerInterface';
 import { BASE_URL } from '../../shared/Utils/apiConfig';
 import { useUserProfile } from '../../shared/Context/UserProfileContext';
+import PlayerQrModal from './PlayerQrModal';
 
 const isInProgress = (status?: string | null): boolean => {
   if (!status) return false;
@@ -24,6 +26,7 @@ const PlayerBuilder: React.FC = () => {
   const [showPuzzleForm, setShowPuzzleForm] = useState<boolean>(false);
   const [showEditPuzzleForm, setShowEditPuzzleForm] = useState<boolean>(false);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+  const [playerToPrint, setPlayerToPrint] = useState<Player | null>(null);
 
   useEffect(() => {
     const cats = allPlayers.filter(player => player.puzzle_type === 'CAT' && player.game_status !== 'Completed');
@@ -52,7 +55,7 @@ const PlayerBuilder: React.FC = () => {
     };
 
     fetchUsers();
-  }, [allPlayers, profile?.rep_id]); // Now updates automatically when any view changes the DB
+  }, [refreshKey, profile?.rep_id]);
 
   const showPuzzleFormHandler = () => {
     setShowPuzzleForm(!showPuzzleForm);
@@ -97,6 +100,7 @@ const PlayerBuilder: React.FC = () => {
             agentGuid={profile?.rep_id}
             currentEvent={profile?.event_id}
             business={profile?.business}
+            onPlayerCreated={(createdPlayer) => setPlayerToPrint(createdPlayer)}
           />
         </div>
       )}
@@ -108,6 +112,7 @@ const PlayerBuilder: React.FC = () => {
             puzzleState={allPlayers}
             updateCurrentPlayer={(updatedPuzzleState) => setAllPlayers(updatedPuzzleState as Player[])}
             setShowEditPuzzleForm={setShowEditPuzzleForm}
+            onPlayerUpdated={(updatedPlayer) => setPlayerToPrint(updatedPlayer as Player)}
           />
         </div>
       )}
@@ -166,20 +171,35 @@ const PlayerBuilder: React.FC = () => {
                   </td>
                   <td>
                     {!isInProgress(player.game_status) && (
-                      <>
-                        <span
-                          className={classes.editPlayer}
+                      <div className={classes.actionGroup}>
+                        <button
+                          type="button"
+                          className={`${classes.actionIconBtn} ${classes.editPlayer}`}
                           onClick={() => editPlayerHandler(player)}
+                          title="Edit Player"
+                          aria-label="Edit Player"
                         >
-                          Edit
-                        </span>
-                        <span
-                          className={classes.deletePlayer}
+                          <FaPencilAlt />
+                        </button>
+                        <button
+                          type="button"
+                          className={`${classes.actionIconBtn} ${classes.printPlayer}`}
+                          onClick={() => setPlayerToPrint(player)}
+                          title="Reprint QR Code"
+                          aria-label="Reprint QR Code"
+                        >
+                          <FaPrint />
+                        </button>
+                        <button
+                          type="button"
+                          className={`${classes.actionIconBtn} ${classes.deletePlayer}`}
                           onClick={() => deletePlayerHandler(player.player_guid)}
+                          title="Delete Player"
+                          aria-label="Delete Player"
                         >
-                          Delete
-                        </span>
-                      </>
+                          <FaTrash />
+                        </button>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -209,20 +229,35 @@ const PlayerBuilder: React.FC = () => {
                   </td>
                   <td>
                     {!isInProgress(player.game_status) && (
-                      <>
-                        <span
-                          className={classes.editPlayer}
+                      <div className={classes.actionGroup}>
+                        <button
+                          type="button"
+                          className={`${classes.actionIconBtn} ${classes.editPlayer}`}
                           onClick={() => editPlayerHandler(player)}
+                          title="Edit Player"
+                          aria-label="Edit Player"
                         >
-                          Edit
-                        </span>
-                        <span
-                          className={classes.deletePlayer}
+                          <FaPencilAlt />
+                        </button>
+                        <button
+                          type="button"
+                          className={`${classes.actionIconBtn} ${classes.printPlayer}`}
+                          onClick={() => setPlayerToPrint(player)}
+                          title="Reprint QR Code"
+                          aria-label="Reprint QR Code"
+                        >
+                          <FaPrint />
+                        </button>
+                        <button
+                          type="button"
+                          className={`${classes.actionIconBtn} ${classes.deletePlayer}`}
                           onClick={() => deletePlayerHandler(player.player_guid)}
+                          title="Delete Player"
+                          aria-label="Delete Player"
                         >
-                          Delete
-                        </span>
-                      </>
+                          <FaTrash />
+                        </button>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -231,6 +266,15 @@ const PlayerBuilder: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {playerToPrint && (
+        <PlayerQrModal
+          key={`${playerToPrint.player_guid}-${playerToPrint.username}-${playerToPrint.puzzle_type}`}
+          player={playerToPrint}
+          onClose={() => setPlayerToPrint(null)}
+          autoPrint={true}
+        />
+      )}
     </div>
   );
 };

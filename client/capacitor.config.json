@@ -1,0 +1,8 @@
+{
+  "appId": "com.puzzlequeue.app",
+  "appName": "Triple Great",
+  "webDir": "build",
+  "server": {
+    "androidScheme": "https"
+  }
+}

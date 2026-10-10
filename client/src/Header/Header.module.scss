@@ -10,7 +10,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding-left: 25px;
+    padding: 0 1.25rem;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
     z-index: 10;
 }
@@ -36,22 +36,28 @@
 .navigation {}
 
 .main-navigation__menu-btn {
-    width: 3rem;
-    height: 3rem;
+    width: 2.25rem;
+    height: 2rem;
     background: transparent;
     border: none;
     display: flex;
     flex-direction: column;
     justify-content: space-around;
-    margin-right: 2rem;
     cursor: pointer;
-}
+    padding: 0;
+    margin: 0;
 
-.main-navigation__menu-btn span {
-    display: block;
-    width: 3rem;
-    height: 2.5px;
-    background: white;
+    span {
+        display: block;
+        width: 100%;
+        height: 2.5px;
+        background: white;
+        border-radius: 2px;
+    }
+
+    @media (min-width: 768px) {
+        display: none;
+    }
 }
 
 .main-navigation__title {
@@ -79,30 +85,150 @@
     display: none;
 }
 
+.brandContainer {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    text-decoration: none;
+    color: #ffffff;
+    margin-right: 24px;
+
+    h1 {
+        margin: 0;
+        font-size: 1.55rem;
+        font-weight: 800;
+        letter-spacing: -0.5px;
+        color: #ffffff;
+        white-space: nowrap;
+    }
+}
+
+.brandLogo {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    object-fit: cover;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    border: 1.5px solid rgba(255, 255, 255, 0.3);
+    transition: transform 0.2s ease;
+
+    &:hover {
+        transform: scale(1.05);
+    }
+}
+
+.mobileBrand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    @media (min-width: 768px) {
+        display: none;
+    }
+}
+
+.mobileBrandLink {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    color: #ffffff;
+
+    span {
+        font-size: 1.25rem;
+        font-weight: 800;
+        letter-spacing: -0.3px;
+        color: #ffffff;
+        white-space: nowrap;
+    }
+}
+
+.brandLogoMobile {
+    width: 42px;
+    height: 42px;
+    border-radius: 9px;
+    object-fit: cover;
+    border: 1.5px solid rgba(255, 255, 255, 0.35);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+.mobileSpacer {
+    width: 2.25rem;
+    display: block;
+
+    @media (min-width: 768px) {
+        display: none;
+    }
+}
+
+.drawerHeader {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 20px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    margin-top: 20px;
+
+    h2 {
+        margin: 0;
+        color: #ffffff;
+        font-size: 1.25rem;
+        font-weight: 800;
+    }
+
+    p {
+        margin: 4px 0 0 0;
+        color: rgba(255, 255, 255, 0.75);
+        font-size: 0.8rem;
+    }
+}
+
+.drawerLogo {
+    width: 42px;
+    height: 42px;
+    border-radius: 8px;
+    object-fit: cover;
+    border: 1.5px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+}
+
 .navLinks {
     display: flex;
-    margin: 15px auto;
-    height: 100vh;
+    margin: 10px 0;
     flex-direction: column;
-    justify-content: center;
-    align-content: center;
+    width: 100%;
 
     .link {
-        color: black;
-        height: 50px;
-        border: 1px solid black;
+        color: #ffffff;
+        height: 42px;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        background-color: rgba(255, 255, 255, 0.1);
+        border-radius: 8px;
         display: flex;
-        margin: 15px;
-        width: 100x;
+        margin: 6px 0;
+        width: 100%;
         justify-content: center;
-        align-content: center;
         align-items: center;
+        text-decoration: none;
+        font-weight: 600;
+        font-size: 0.92rem;
+        transition: background 0.15s ease, border-color 0.15s ease;
+
+        &:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.4);
+        }
     }
 }
 
 .loggedInButtons {
-    display: flex;
-    padding-right: 25px;
+    display: none;
+
+    @media (min-width: 768px) {
+        display: flex;
+        align-items: center;
+        padding-right: 25px;
+    }
 }
 
 .hoverMenu {
@@ -171,6 +297,12 @@
         .link {
             color: white;
             border: none;
+            background-color: transparent;
+            margin: 0 10px;
+
+            &:hover {
+                background-color: transparent;
+            }
         }
     }
 }
