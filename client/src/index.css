@@ -14,18 +14,20 @@ code {
 }
 
 /* ==========================================================================
-   Thermal / Badge Print Stylesheet (Scaled to Fill Label Width)
+   Thermal / Badge Print Stylesheet — 4in x 3in (100 x 75 mm) labels
+   All sizes are absolute (in) so the layout matches the physical label
+   instead of being computed from a Letter/A4 page and then cropped.
    ========================================================================== */
 @media print {
   @page {
-    size: auto;
+    size: 4in 3in;
     margin: 0;
   }
 
   html,
   body {
-    width: 100% !important;
-    height: 100% !important;
+    width: 4in !important;
+    height: 3in !important;
     margin: 0 !important;
     padding: 0 !important;
     background: #ffffff !important;
@@ -46,77 +48,90 @@ code {
     visibility: visible !important;
   }
 
-  /* Scale to fill the full width of the thermal label, centered */
+  /* Fixed 4in x 3in badge: QR on the left, text stacked on the right */
   .printable-player-badge {
     position: fixed !important;
-    left: 4% !important;
-    top: 3% !important;
-    width: 92% !important;
-    max-width: 92% !important;
+    left: 0.08in !important;
+    top: 0.08in !important;
+    width: 3.84in !important;
+    height: 2.84in !important;
+    max-width: none !important;
     box-sizing: border-box !important;
     margin: 0 !important;
-    padding: 16px 20px !important;
-    border: 3px dashed #000000 !important;
-    border-radius: 12px !important;
+    padding: 0.1in !important;
+    border: 2px dashed #000000 !important;
+    border-radius: 10px !important;
     background: #ffffff !important;
-    display: flex !important;
-    flex-direction: column !important;
+    box-shadow: none !important;
+    display: grid !important;
+    grid-template-columns: 2.2in 1fr !important;
+    grid-template-rows: auto 1fr auto !important;
+    grid-template-areas:
+      "qr title"
+      "qr name"
+      "qr type" !important;
+    column-gap: 0.1in !important;
     align-items: center !important;
-    justify-content: space-between !important;
+    justify-items: center !important;
     text-align: center !important;
     overflow: hidden !important;
     page-break-inside: avoid !important;
+    break-inside: avoid !important;
     z-index: 999999 !important;
   }
 
   .printable-player-badge .badge-title {
-    font-size: 16px !important;
+    grid-area: title !important;
+    font-size: 11pt !important;
     font-weight: 900 !important;
-    letter-spacing: 2px !important;
+    letter-spacing: 1px !important;
     text-transform: uppercase !important;
     color: #000000 !important;
-    margin: 0 0 8px 0 !important;
-    line-height: 1.2 !important;
+    margin: 0 !important;
+    line-height: 1.15 !important;
   }
 
   .printable-player-badge .badge-qr {
+    grid-area: qr !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
-    margin: 6px 0 !important;
+    margin: 0 !important;
     padding: 0 !important;
+    background: transparent !important;
   }
 
   .printable-player-badge .badge-qr svg {
     display: block !important;
-    margin: 0 auto !important;
-    width: 2.35in !important;
-    height: 2.35in !important;
-    max-width: 72vw !important;
-    max-height: 72vw !important;
+    margin: 0 !important;
+    width: 2.2in !important;
+    height: 2.2in !important;
+    max-width: none !important;
+    max-height: none !important;
   }
 
   .printable-player-badge .badge-username {
-    font-size: 26px !important;
+    grid-area: name !important;
+    font-size: 18pt !important;
     font-weight: 900 !important;
-    line-height: 1.2 !important;
-    letter-spacing: 0.5px !important;
+    line-height: 1.15 !important;
     color: #000000 !important;
-    margin: 8px 0 6px 0 !important;
+    margin: 0 !important;
     word-break: break-all !important;
-    max-width: 92% !important;
+    max-width: 100% !important;
   }
 
   .printable-player-badge .badge-type {
-    font-size: 14px !important;
+    grid-area: type !important;
+    font-size: 10pt !important;
     font-weight: 900 !important;
     text-transform: uppercase !important;
     color: #000000 !important;
-    letter-spacing: 1px !important;
+    letter-spacing: 0.5px !important;
     background: transparent !important;
     border: 2px solid #000000 !important;
     border-radius: 6px !important;
-    padding: 3px 14px !important;
+    padding: 2px 8px !important;
     line-height: 1.2 !important;
     margin: 0 !important;
   }
