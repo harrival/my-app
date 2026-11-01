@@ -1,16 +1,68 @@
 /** Routes for users of pg-intro-demo. */
 
+const crypto = require("crypto");
 const db = require("../db");
 const express = require("express");
 const router = express.Router();
+const { getBusinessRecord, upsertBusinessRecord } = require("../services/businessService");
+
+/** When a Supervisor is saved in users_table, create/link their business in business_table. */
+async function linkSupervisorBusiness(tableName, row) {
+  if (
+    String(tableName).toLowerCase() !== "users_table" ||
+    String(row?.permission_group || "").toLowerCase() !== "supervisor" ||
+    !String(row?.business || "").trim()
+  ) return;
+  try {
+    const existing = await getBusinessRecord({ business: String(row.business).trim() });
+    row.business_info = await upsertBusinessRecord(
+      {
+        business: String(row.business).trim(),
+        user_guid: existing?.user_guid || row.user_guid,
+        ...(existing ? {} : {
+          contact_email: row.email || "",
+          contact_phone: row.phone_number || "",
+          physical_address: row.address || "",
+        }),
+      },
+      row.user_guid
+    );
+  } catch (err) {
+    console.error("Failed to link supervisor business:", err.message);
+  }
+}
 
 const SCOPED_TABLES = [
   'events_table',
   'game_players_table',
   'puzzles_type',
   'reps_table',
-  'users_table'
+  'users_table',
+  'customers',
+  'business_settings',
+  'business_templates',
+  'items',
+  'item_units',
+  'reservations',
+  'reservation_changes',
+  'payments',
+  'inventory_blackouts',
+  'supervisor_audit_logs',
+  'notification_outbox'
 ];
+
+const STRICT_TENANT_TABLES = new Set([
+  'business_settings',
+  'business_templates',
+  'items',
+  'item_units',
+  'reservations',
+  'reservation_changes',
+  'payments',
+  'inventory_blackouts',
+  'supervisor_audit_logs',
+  'notification_outbox'
+]);
 
 function isScopedTable(tableName) {
   if (!tableName) return false;
@@ -18,6 +70,16 @@ function isScopedTable(tableName) {
   return SCOPED_TABLES.includes(lower) ||
     lower === 'event_table' ||
     lower === 'puzzle_type';
+}
+
+function applyStrictTenantFilter(req, tableName, filters) {
+  if (!tableName) return filters;
+  const lower = tableName.toLowerCase();
+  const headerBusiness = req.headers['x-tenant-business'] || req.headers['x-user-business'];
+  if (STRICT_TENANT_TABLES.has(lower) && !filters.business && headerBusiness) {
+    return { ...filters, business: headerBusiness };
+  }
+  return filters;
 }
 
 /** Get users: [user, user, user] */
@@ -56,7 +118,8 @@ router.get("/getAllInnerJoin", async function (req, res, next) {
 
 /** Get items from a table with dynamic filters and limit */
 router.get("/getAll", async function (req, res, next) {
-  const { tableName, limit = 20, orderBy, sortBy, sortDir, ...filters } = req.query;
+  const { tableName, limit = 20, orderBy, sortBy, sortDir, ...rawFilters } = req.query;
+  const filters = applyStrictTenantFilter(req, tableName, rawFilters);
 
   // Security: Whitelist allowed sort columns to prevent SQL injection
   const validSortColumns = ['time_used_in_sec', 'time_modified', 'time_created'];
@@ -99,7 +162,8 @@ router.get("/getAll", async function (req, res, next) {
 
 /** Get a single item from a table with dynamic filters */
 router.get("/getOne", async function (req, res, next) {
-  const { tableName, ...filters } = req.query;
+  const { tableName, ...rawFilters } = req.query;
+  const filters = applyStrictTenantFilter(req, tableName, rawFilters);
   try {
     if (!tableName) {
       return res.status(400).json({ error: "tableName is required" });
@@ -260,8 +324,10 @@ router.post("/addToTable", async function (req, res, next) {
     const query = `INSERT INTO ${tableName} (${fieldNames}) VALUES (${placeholders}) RETURNING *`;
 
     const result = await db.query(query, values);
+    const inserted = result.rows[0];
+    await linkSupervisorBusiness(tableName, inserted);
 
-    return res.status(201).json(result.rows[0]);
+    return res.status(201).json(inserted);
   } catch (err) {
     return next(err);
   }
@@ -335,7 +401,9 @@ router.patch("/editPlayerForm/:id", async function (req, res, next) {
       return res.status(404).json({ error: "Item not found" });
     }
 
-    return res.json(result.rows[0]);
+    const updated = result.rows[0];
+    await linkSupervisorBusiness(tableName, updated);
+    return res.json(updated);
   }
 
   catch (err) {
@@ -362,6 +430,334 @@ router.delete("/deletePlayer/:id", async function (req, res, next) {
 });
 const userProfiles = {};
 
+function normalizePhoneDigits(rawPhone) {
+  const digits = String(rawPhone || "").replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("1")) {
+    return digits.slice(1);
+  }
+  return digits;
+}
+
+function hashCustomerPassword(password) {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const derived = crypto.scryptSync(String(password), salt, 64).toString("hex");
+  return `${salt}:${derived}`;
+}
+
+function verifyCustomerPassword(password, storedHash) {
+  if (!storedHash || !password) return false;
+  if (!storedHash.includes(":")) {
+    return String(password) === String(storedHash);
+  }
+  const [salt, keyHex] = storedHash.split(":");
+  if (!salt || !keyHex) return false;
+  const derived = crypto.scryptSync(String(password), salt, 64);
+  const keyBuf = Buffer.from(keyHex, "hex");
+  if (derived.length !== keyBuf.length) return false;
+  return crypto.timingSafeEqual(derived, keyBuf);
+}
+
+function toCustomerSessionProfile(customerRow) {
+  const business = customerRow.business || null;
+  return {
+    id: customerRow.id,
+    user_guid: customerRow.customer_guid,
+    customer_guid: customerRow.customer_guid,
+    first_name: customerRow.first_name,
+    last_name: customerRow.last_name,
+    email: customerRow.email,
+    phone_number: customerRow.phone_number,
+    address: "",
+    permission_group: "Customer",
+    is_admin: false,
+    business,
+    business_value: business || "Customer",
+    sms_opt_in: Boolean(customerRow.sms_opt_in),
+    account_source: "customers",
+  };
+}
+
+/**
+ * POST /auth/lookup
+ * Dual-table sign-in lookup:
+ * 1. First checks `users_table` (Staff) -> if found, returns auth_method = 'OTP_6_DIGIT'
+ * 2. If not found in `users_table`, checks `customers` table -> if found, returns auth_method = 'PASSWORD'
+ */
+router.post("/auth/lookup", async function (req, res, next) {
+  try {
+    const rawIdentifier = String(
+      req.body?.identifier || req.body?.phone_number || req.body?.email || ""
+    ).trim();
+
+    if (!rawIdentifier) {
+      return res
+        .status(400)
+        .json({ error: "Please enter your phone number or email address." });
+    }
+
+    const isEmail = rawIdentifier.includes("@");
+    const dbPhone = normalizePhoneDigits(rawIdentifier);
+
+    // 1. FIRST CHECK: users_table (Staff accounts sign in with 6-digit code)
+    let staffResult;
+    if (isEmail) {
+      staffResult = await db.query(
+        `SELECT * FROM users_table WHERE LOWER(email) = LOWER($1) LIMIT 1`,
+        [rawIdentifier]
+      );
+    } else {
+      if (dbPhone.length < 7) {
+        return res
+          .status(400)
+          .json({ error: "Please enter a valid 10-digit phone number or email." });
+      }
+      staffResult = await db.query(
+        `SELECT * FROM users_table
+         WHERE REGEXP_REPLACE(COALESCE(phone_number, ''), '\\D', '', 'g') = $1
+            OR phone_number = $2
+         LIMIT 1`,
+        [dbPhone, rawIdentifier]
+      );
+    }
+
+    if (staffResult.rows.length > 0) {
+      const staffUser = staffResult.rows[0];
+      return res.json({
+        found: true,
+        source: "users_table",
+        auth_method: "OTP_6_DIGIT",
+        account: {
+          ...staffUser,
+          account_source: "users_table",
+        },
+      });
+    }
+
+    // 2. SECOND CHECK: customers table (Customer accounts are enterprise-wide and sign in with password)
+    let custResult;
+    if (isEmail) {
+      custResult = await db.query(
+        `SELECT * FROM customers
+         WHERE LOWER(email) = LOWER($1)
+         ORDER BY time_modified DESC NULLS LAST, id DESC LIMIT 1`,
+        [rawIdentifier]
+      );
+    } else {
+      custResult = await db.query(
+        `SELECT * FROM customers
+         WHERE REGEXP_REPLACE(COALESCE(phone_number, ''), '\\D', '', 'g') = $1
+            OR phone_number = $2
+         ORDER BY time_modified DESC NULLS LAST, id DESC LIMIT 1`,
+        [dbPhone, rawIdentifier]
+      );
+    }
+
+    if (custResult.rows.length > 0) {
+      const customerRow = custResult.rows[0];
+      return res.json({
+        found: true,
+        source: "customers",
+        auth_method: "PASSWORD",
+        has_password: Boolean(customerRow.password_hash),
+        account: toCustomerSessionProfile(customerRow),
+      });
+    }
+
+    return res.json({
+      found: false,
+      source: null,
+      auth_method: null,
+      message: "No account found with those details. Please create an account to continue.",
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/**
+ * POST /auth/customer/login
+ * Customer signs in with password against `customers` table.
+ */
+router.post("/auth/customer/login", async function (req, res, next) {
+  try {
+    const rawIdentifier = String(
+      req.body?.identifier || req.body?.phone_number || req.body?.email || ""
+    ).trim();
+    const password = String(req.body?.password || "");
+    const customerGuid = String(req.body?.customer_guid || "").trim();
+
+    if (!password) {
+      return res.status(400).json({ error: "Password is required for customer sign in." });
+    }
+
+    let custResult;
+    if (customerGuid) {
+      custResult = await db.query(
+        `SELECT * FROM customers WHERE customer_guid = $1 LIMIT 1`,
+        [customerGuid]
+      );
+    } else if (rawIdentifier.includes("@")) {
+      custResult = await db.query(
+        `SELECT * FROM customers
+         WHERE LOWER(email) = LOWER($1)
+         ORDER BY time_modified DESC NULLS LAST, id DESC LIMIT 1`,
+        [rawIdentifier]
+      );
+    } else {
+      const dbPhone = normalizePhoneDigits(rawIdentifier);
+      custResult = await db.query(
+        `SELECT * FROM customers
+         WHERE REGEXP_REPLACE(COALESCE(phone_number, ''), '\\D', '', 'g') = $1
+            OR phone_number = $2
+         ORDER BY time_modified DESC NULLS LAST, id DESC LIMIT 1`,
+        [dbPhone, rawIdentifier]
+      );
+    }
+
+    if (!custResult || custResult.rows.length === 0) {
+      return res.status(404).json({ error: "Customer account not found." });
+    }
+
+    const customerRow = custResult.rows[0];
+
+    // If customer row was created earlier via guest checkout without a password, set their password now
+    if (!customerRow.password_hash) {
+      const newHash = hashCustomerPassword(password);
+      await db.query(
+        `UPDATE customers SET password_hash = $1, time_modified = CURRENT_TIMESTAMP WHERE customer_guid = $2`,
+        [newHash, customerRow.customer_guid]
+      );
+    } else if (!verifyCustomerPassword(password, customerRow.password_hash)) {
+      return res.status(401).json({ error: "Invalid password. Please try again." });
+    }
+
+    const sessionProfile = toCustomerSessionProfile(customerRow);
+    userProfiles[sessionProfile.user_guid] = sessionProfile;
+
+    return res.json({
+      success: true,
+      source: "customers",
+      auth_method: "PASSWORD",
+      profile: sessionProfile,
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/**
+ * POST /auth/customer/signup
+ * Account created from Sign Up page goes strictly to `customers` table (never `users_table`).
+ */
+router.post("/auth/customer/signup", async function (req, res, next) {
+  try {
+    const first_name = String(req.body?.first_name || "").trim();
+    const last_name = String(req.body?.last_name || "").trim();
+    const email = String(req.body?.email || "").trim().toLowerCase();
+    const rawPhone = String(req.body?.phone_number || "").trim();
+    const dbPhone = normalizePhoneDigits(rawPhone);
+    const password = String(req.body?.password || "");
+    const business = req.body?.business ? String(req.body.business).trim() : null;
+    const sms_opt_in = Boolean(req.body?.sms_opt_in);
+
+    if (!first_name || !last_name || !email || !dbPhone || !password) {
+      return res.status(400).json({
+        error:
+          "First name, last name, email, 10-digit phone number, and password are required.",
+      });
+    }
+    if (dbPhone.length !== 10) {
+      return res
+        .status(400)
+        .json({ error: "Please enter a valid 10-digit phone number." });
+    }
+    if (password.length < 4) {
+      return res
+        .status(400)
+        .json({ error: "Password must be at least 4 characters." });
+    }
+
+    const passwordHash = hashCustomerPassword(password);
+
+    // Customer information is enterprise-wide (not tied to a business)
+    const existingRes = await db.query(
+      `SELECT * FROM customers
+       WHERE LOWER(email) = LOWER($1)
+          OR REGEXP_REPLACE(COALESCE(phone_number, ''), '\\D', '', 'g') = $2
+       ORDER BY time_modified DESC NULLS LAST, id DESC
+       LIMIT 1`,
+      [email, dbPhone]
+    );
+
+    let customerRow;
+    if (existingRes.rows.length > 0) {
+      const existing = existingRes.rows[0];
+      if (existing.password_hash) {
+        return res.status(409).json({
+          error:
+            "An account with this email or phone number already exists. Please sign in with your password.",
+        });
+      }
+      const updated = await db.query(
+        `UPDATE customers
+         SET first_name = $1,
+             last_name = $2,
+             email = $3,
+             phone_number = $4,
+             password_hash = $5,
+             sms_opt_in = $6,
+             time_modified = CURRENT_TIMESTAMP
+         WHERE customer_guid = $7
+         RETURNING *`,
+        [
+          first_name,
+          last_name,
+          email,
+          dbPhone,
+          passwordHash,
+          sms_opt_in,
+          existing.customer_guid,
+        ]
+      );
+      customerRow = updated.rows[0];
+    } else {
+      const customerGuid = `cust_${Date.now().toString(36)}_${crypto
+        .randomBytes(4)
+        .toString("hex")}`;
+      const inserted = await db.query(
+        `INSERT INTO customers
+          (customer_guid, business, first_name, last_name, email, phone_number, password_hash, sms_opt_in, time_created, time_modified)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         RETURNING *`,
+        [
+          customerGuid,
+          business,
+          first_name,
+          last_name,
+          email,
+          dbPhone,
+          passwordHash,
+          sms_opt_in,
+        ]
+      );
+      customerRow = inserted.rows[0];
+    }
+
+    const sessionProfile = toCustomerSessionProfile(customerRow);
+    userProfiles[sessionProfile.user_guid] = sessionProfile;
+
+    return res.status(201).json({
+      success: true,
+      created: true,
+      source: "customers",
+      table: "customers",
+      profile: sessionProfile,
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 router.post("/profile/:user_guid", function (req, res, next) {
   try {
     const { user_guid } = req.params;
@@ -386,11 +782,8 @@ router.post("/profile/:user_guid", function (req, res, next) {
 router.get("/profile/:user_guid", async function (req, res, next) {
   try {
     const { user_guid } = req.params;
-    if (userProfiles[user_guid]) {
-      return res.json(userProfiles[user_guid]);
-    }
 
-    // Fallback: fetch from database and restore cache
+    // 1. First check users_table (Staff) so role revocations or permission_group changes apply immediately
     const result = await db.query(
       "SELECT * FROM users_table WHERE user_guid = $1",
       [user_guid]
@@ -398,11 +791,33 @@ router.get("/profile/:user_guid", async function (req, res, next) {
 
     if (result.rows.length > 0) {
       const profile = result.rows[0];
+      if (profile.business) {
+        try {
+          profile.business_info = await getBusinessRecord({ business: profile.business });
+        } catch {}
+      }
       const businessValue = profile.business || "Standard Customer";
       profile.business_value = businessValue;
+      profile.account_source = "users_table";
       userProfiles[user_guid] = profile;
 
       return res.json(profile);
+    }
+
+    // 2. If not found in users_table, check customers table
+    const custResult = await db.query(
+      "SELECT * FROM customers WHERE customer_guid = $1 LIMIT 1",
+      [user_guid]
+    );
+
+    if (custResult.rows.length > 0) {
+      const custProfile = toCustomerSessionProfile(custResult.rows[0]);
+      userProfiles[user_guid] = custProfile;
+      return res.json(custProfile);
+    }
+
+    if (userProfiles[user_guid]) {
+      return res.json(userProfiles[user_guid]);
     }
 
     return res.json(null);
@@ -465,6 +880,13 @@ router.post("/device-link/approve", function (req, res, next) {
     // Prevent child/linked devices from approving other devices
     if (userProfile?.isLinkedDevice) {
       return res.status(403).json({ error: "Linked (child) devices cannot authorize other devices." });
+    }
+    // Prevent customer accounts from linking or authorizing devices
+    if (
+      userProfile?.permission_group?.toLowerCase() === "customer" ||
+      userProfile?.account_source === "customers"
+    ) {
+      return res.status(403).json({ error: "Device linking is only available for staff members." });
     }
     const result = deviceLinkService.approveTicket({
       identifier,

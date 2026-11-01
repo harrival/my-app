@@ -8,7 +8,7 @@ import QrScanner from '../../UI/Scanner/QrScanner';
 import classes from './LinkedDevicesModal.module.scss';
 
 const LinkedDevicesModal = ({ onClose }) => {
-  const { profile, isLinkedDevice } = useUserProfile();
+  const { profile, isLinkedDevice, isElevatedStaff } = useUserProfile();
   const { socket } = useRefresh();
 
   const [pairCodeInput, setPairCodeInput] = useState('');
@@ -125,6 +125,10 @@ const LinkedDevicesModal = ({ onClose }) => {
       console.error('Failed to revoke device:', err);
     }
   };
+
+  if (!isElevatedStaff) {
+    return null;
+  }
 
   if (isLinkedDevice || profile?.isLinkedDevice) {
     return (

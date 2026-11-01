@@ -8,20 +8,24 @@ import { AuthContext } from './shared/Context/auth-context';
 // Import your RefreshProvider here
 import { RefreshProvider } from './shared/Context/RefreshContext';
 import { UserProfileProvider } from './shared/Context/UserProfileContext';
+import { SettingsProvider } from './shared/Context/SettingsContext';
+import { TenantProvider } from './TripleGreat/Components/TenantContext';
 import { useTVNavigation } from './shared/Hooks/useTVNavigation';
 
 import './CSSVars.scss';
 import './Global.scss';
 
-// Axios interceptor to inject Supervisor role and business headers
+// Axios interceptor to inject Supervisor role, identity, and business tenant headers
 axios.interceptors.request.use((config) => {
   const sessionStr = localStorage.getItem('userSession');
   if (sessionStr) {
     try {
       const session = JSON.parse(sessionStr);
       if (session.loggedIn) {
+        config.headers['x-user-guid'] = session.userGuid || '';
         config.headers['x-user-role'] = session.permissionGroup || '';
         config.headers['x-user-business'] = session.business || '';
+        config.headers['x-is-admin'] = String(Boolean(session.isAdmin));
       }
     } catch (e) {
       console.error(e);
@@ -71,8 +75,12 @@ function App() {
       <AuthContext.Provider value={{ isLoggedIn, login, logout }}>
         <RefreshProvider>
           <UserProfileProvider>
-            <Header onShowModal={showModalHandler} setColor={setColor} />
-            <Router />
+            <SettingsProvider>
+              <TenantProvider>
+                <Header onShowModal={showModalHandler} setColor={setColor} />
+                <Router />
+              </TenantProvider>
+            </SettingsProvider>
           </UserProfileProvider>
         </RefreshProvider>
       </AuthContext.Provider>

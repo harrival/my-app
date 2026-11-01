@@ -78,6 +78,17 @@ const AddUserForm: React.FC<AddUserFormProps> = ({ onClose, onSuccess }) => {
             return;
         }
 
+        const isNewSupervisor = formData.permission_group === 'Supervisor';
+        const businessSlug = (formData.business || '')
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '_')
+            .replace(/^_+|_+$/g, '');
+        if (isNewSupervisor && !businessSlug) {
+            alert('A business is required when creating a Supervisor.');
+            return;
+        }
+
         // Placeholder for actual API call
         const emailDuplicateError = await validateUniqueEmail(formData.email);
         if (emailDuplicateError) {
@@ -86,13 +97,15 @@ const AddUserForm: React.FC<AddUserFormProps> = ({ onClose, onSuccess }) => {
         }
 
         try {
-            // Example API call (replace with your actual /addToTable endpoint logic)
-            const response = await axios.post(`${BASE_URL}/addToTable`, {
+            // Creating a Supervisor also creates/links the business record (business + user_guid) on the server.
+            const userGuid = crypto.randomUUID();
+            await axios.post(`${BASE_URL}/addToTable`, {
                 tableName: 'users_table',
                 fields: {
-                    user_guid: crypto.randomUUID(), // Generate a new GUID
+                    user_guid: userGuid,
                     ...formData,
-                    is_admin: formData.permission_group === 'admin', // Derive from permission_group
+                    business: businessSlug || formData.business,
+                    is_admin: formData.permission_group === 'Admin',
                     time_created: new Date().toISOString(),
                 }
             });

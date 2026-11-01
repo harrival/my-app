@@ -2,7 +2,7 @@ import React, { useState, useContext, useEffect, useCallback } from 'react';
 import { AuthContext } from '../Context/auth-context';
 import { useUserProfile } from '../Context/UserProfileContext';
 import { useRefresh } from '../Context/RefreshContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import { QRCodeSVG } from 'qrcode.react';
 import { getResolvedBaseUrl } from '../../shared/Utils/apiConfig';
@@ -18,6 +18,9 @@ const AuthenticateUser = () => {
     const { profile, setProfile, refreshProfile } = useUserProfile();
     const { socket } = useRefresh();
     const navigate = useNavigate();
+    const location = useLocation();
+
+    const requestedProtectedPath = location.state?.from || null;
 
     // Detect client device type accurately: mobile phones are NEVER TVs
     const isMobile = typeof window !== 'undefined' && (
@@ -29,19 +32,34 @@ const AuthenticateUser = () => {
     );
     const detectedDeviceType = isTV ? 'Television' : isMobile ? 'Phone / Tablet' : 'Computer';
 
-    // Mode: 'phone' (Primary account login with SMS) vs 'link' (WhatsApp-style companion link)
-    // On computer or TV, default to 'link' for seamless WhatsApp-style experience, or 'phone' if preferred
-    const [authMode, setAuthMode] = useState(isMobile ? 'phone' : 'link');
+    // Mode: 'phone' (Sign In), 'signup' (Create Account), 'link' (Link Device via QR)
+    const [authMode, setAuthMode] = useState(isTV ? 'link' : 'phone');
 
-    // Phone & OTP state
-    const [phoneNumber, setPhoneNumber] = useState('+1 ');
-    const [step, setStep] = useState(1); // 1: phone input, 2: OTP input
+    // Account Sign-In state
+    const [identifier, setIdentifier] = useState('');
+    const [step, setStep] = useState(1); // 1: identifier, 2: verify
+    const [matchedSource, setMatchedSource] = useState(null);
+    const [authenticatedUser, setAuthenticatedUser] = useState(null);
+    const [customerHasPassword, setCustomerHasPassword] = useState(true);
+
+    // 6-digit verification code state
     const [generatedOtp, setGeneratedOtp] = useState('');
     const [otpInput, setOtpInput] = useState('');
+    const [otpAttempts, setOtpAttempts] = useState(0);
+
+    // Password state
+    const [customerPassword, setCustomerPassword] = useState('');
+
+    // Create Account state (customer information is personal and not tied to a business)
+    const [signUpFirstName, setSignUpFirstName] = useState('');
+    const [signUpLastName, setSignUpLastName] = useState('');
+    const [signUpEmail, setSignUpEmail] = useState('');
+    const [signUpPhone, setSignUpPhone] = useState('');
+    const [signUpPassword, setSignUpPassword] = useState('');
+    const [signUpSmsOptIn, setSignUpSmsOptIn] = useState(true);
+
     const [error, setError] = useState('');
     const [infoMessage, setInfoMessage] = useState('');
-    const [authenticatedUser, setAuthenticatedUser] = useState(null);
-    const [otpAttempts, setOtpAttempts] = useState(0);
     const [loading, setLoading] = useState(false);
 
     // Device Linking state
@@ -49,13 +67,11 @@ const AuthenticateUser = () => {
     const [ticketTimeLeft, setTicketTimeLeft] = useState(0);
     const [linkingStatus, setLinkingStatus] = useState('waiting'); // 'waiting' | 'approved' | 'expired'
 
-    // Generate or refresh pairing ticket
     const generateNewTicket = useCallback(async () => {
         try {
             setLoading(true);
             setError('');
             const currentApiUrl = getResolvedBaseUrl();
-            console.log('[Auth] Requesting ticket from:', currentApiUrl);
 
             const res = await axios.post(`${currentApiUrl}/device-link/ticket`, {
                 deviceType: isTV ? 'Television' : isMobile ? 'Mobile Companion' : 'Computer / Browser',
@@ -67,20 +83,18 @@ const AuthenticateUser = () => {
             setTicketTimeLeft(Math.max(0, Math.round((res.data.expiresAt - Date.now()) / 1000)));
         } catch (err) {
             console.error('Failed to create device link ticket:', err);
-            setError('Could not generate linking code. Check server connection.');
+            setError('Could not generate linking code. Please check your connection.');
         } finally {
             setLoading(false);
         }
     }, [isTV, isMobile]);
 
-    // Create ticket when in 'link' mode
     useEffect(() => {
         if (authMode === 'link') {
             generateNewTicket();
         }
     }, [authMode, generateNewTicket]);
 
-    // Countdown timer for ticket validity
     useEffect(() => {
         if (authMode !== 'link' || !linkTicket) return;
 
@@ -95,28 +109,24 @@ const AuthenticateUser = () => {
         return () => clearInterval(timer);
     }, [authMode, linkTicket]);
 
-    // Listen for WebSocket approval of the pairing ticket
     useEffect(() => {
         if (!socket || authMode !== 'link' || !linkTicket) return;
 
         socket.emit('join_ticket_room', linkTicket.ticketId);
 
         const handleApproved = async (sessionPayload) => {
-            console.log('[Auth] Device link approved:', sessionPayload);
             setLinkingStatus('approved');
-            setInfoMessage('✓ Linking approved! Signing into session...');
+            setInfoMessage('✓ Device linked! Signing in...');
 
             try {
-                // If this is a mobile phone, it is NEVER a TV
                 const isTVDevice = !isMobile && Boolean(
-                    sessionPayload.isTV || 
-                    sessionPayload.deviceType === 'Television' || 
+                    sessionPayload.isTV ||
+                    sessionPayload.deviceType === 'Television' ||
                     isTV
                 );
 
                 const sessionDurationMs = isTVDevice ? (24 * 60 * 60 * 1000) : (60 * 60 * 1000);
 
-                // Store session with 24h expiry for TV or 1h for mobile companion
                 const sessionToSave = {
                     loggedIn: true,
                     userGuid: sessionPayload.userGuid,
@@ -134,12 +144,14 @@ const AuthenticateUser = () => {
                 localStorage.setItem('userSession', JSON.stringify(sessionToSave));
 
                 await refreshProfile(sessionPayload.userGuid);
+                auth.login();
                 if (isTVDevice) {
                     navigate(`/${sessionPayload.business}/PlayersMonitor`, { replace: true });
+                } else if (requestedProtectedPath) {
+                    navigate(requestedProtectedPath, { replace: true });
                 } else {
                     navigate('/', { replace: true });
                 }
-                auth.login();
             } catch (err) {
                 console.error('Failed to finalize linked login:', err);
                 setError('Failed to initialize session. Please try again.');
@@ -150,54 +162,68 @@ const AuthenticateUser = () => {
         return () => {
             socket.off('device_link_approved', handleApproved);
         };
-    }, [socket, authMode, linkTicket, navigate, auth, refreshProfile]);
+    }, [socket, authMode, linkTicket, navigate, auth, refreshProfile, isMobile, isTV, requestedProtectedPath]);
 
-    const handlePhoneSubmit = async (event) => {
+    const handleLookupSubmit = async (event) => {
         event.preventDefault();
         setError('');
         setInfoMessage('');
 
-        const clean = phoneNumber.replace(/\D/g, '');
-        const dbPhone = clean.length === 11 && clean.startsWith('1') ? clean.substring(1) : clean;
-
-        if (dbPhone.length !== 10) {
-            setError('Please enter a valid 10-digit phone number.');
+        const trimmed = identifier.trim();
+        if (!trimmed) {
+            setError('Please enter your phone number or email.');
             return;
         }
 
         setLoading(true);
         try {
             const currentApiUrl = getResolvedBaseUrl();
-            const response = await axios.get(`${currentApiUrl}/getAll`, {
-                params: {
-                    tableName: 'users_table',
-                    phone_number: dbPhone
-                }
+            const response = await axios.post(`${currentApiUrl}/auth/lookup`, {
+                identifier: trimmed
             });
 
-            if (response.data && response.data.length > 0) {
-                setAuthenticatedUser(response.data[0]);
+            const data = response.data;
+
+            if (data?.found && data.source === 'users_table') {
+                setMatchedSource('users_table');
+                setAuthenticatedUser(data.account);
                 const otp = Math.floor(100000 + Math.random() * 900000).toString();
                 setGeneratedOtp(otp);
-                console.log('--- GENERATED OTP CODE ---');
-                console.log(`OTP: ${otp}`);
-                console.log('--------------------------');
+                console.log('--- VERIFICATION CODE ---');
+                console.log(`Code: ${otp}`);
+                console.log('-------------------------');
 
                 setOtpAttempts(0);
+                setOtpInput('');
                 setStep(2);
-                setInfoMessage('Verification code generated. Please check your console.');
+                setInfoMessage('Please enter your 6-digit verification code.');
+            } else if (data?.found && data.source === 'customers') {
+                setMatchedSource('customers');
+                setAuthenticatedUser(data.account);
+                setCustomerHasPassword(Boolean(data.has_password));
+                setCustomerPassword('');
+                setStep(2);
+                setInfoMessage(
+                    data.has_password
+                        ? 'Please enter your password to sign in.'
+                        : 'Please create a password below to complete your sign in.'
+                );
             } else {
-                setError('Phone number not found in registered accounts.');
+                setError('No account found with those details. Please create an account to continue.');
+                if (trimmed.includes('@')) {
+                    setSignUpEmail(trimmed);
+                } else {
+                    setSignUpPhone(trimmed);
+                }
             }
         } catch (err) {
-            console.error('Error verifying phone number:', err);
-            setError('Connection error. Please try again.');
+            setError(err?.response?.data?.error || 'Connection error. Please try again.');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleOtpSubmit = async (event) => {
+    const handleStaffOtpSubmit = async (event) => {
         event.preventDefault();
         setError('');
 
@@ -206,12 +232,12 @@ const AuthenticateUser = () => {
             return;
         }
 
-        if (otpInput !== generatedOtp) {
+        if (otpInput.trim() !== generatedOtp) {
             const newAttempts = otpAttempts + 1;
             setOtpAttempts(newAttempts);
             const remaining = MAX_OTP_ATTEMPTS - newAttempts;
             if (remaining > 0) {
-                setError(`Incorrect code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`);
+                setError(`Incorrect verification code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`);
             } else {
                 setError('Too many failed attempts. Please go back and request a new code.');
             }
@@ -223,15 +249,105 @@ const AuthenticateUser = () => {
             const currentApiUrl = getResolvedBaseUrl();
             await axios.post(`${currentApiUrl}/profile/${authenticatedUser.user_guid}`, authenticatedUser);
             await refreshProfile(authenticatedUser.user_guid);
+            auth.login();
             if (isTV) {
                 navigate(`/${authenticatedUser.business}/PlayersMonitor`, { replace: true });
+            } else if (requestedProtectedPath) {
+                navigate(requestedProtectedPath, { replace: true });
             } else {
-                navigate('/', { replace: true });
+                navigate(`/${authenticatedUser.business || 'alpha_rentals'}`, { replace: true });
             }
-            auth.login();
+        } catch {
+            setError('Unable to sign in right now. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleCustomerPasswordSubmit = async (event) => {
+        event.preventDefault();
+        setError('');
+
+        if (!customerPassword) {
+            setError('Please enter your password.');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const currentApiUrl = getResolvedBaseUrl();
+            const res = await axios.post(`${currentApiUrl}/auth/customer/login`, {
+                customer_guid: authenticatedUser?.customer_guid || authenticatedUser?.user_guid,
+                identifier: identifier.trim(),
+                password: customerPassword
+            });
+
+            const loggedInProfile = res.data?.profile;
+            if (loggedInProfile?.user_guid) {
+                await refreshProfile(loggedInProfile.user_guid);
+                auth.login();
+                if (requestedProtectedPath) {
+                    navigate(requestedProtectedPath, { replace: true });
+                } else {
+                    navigate('/', { replace: true });
+                }
+            } else {
+                setError('Unable to complete sign in. Please try again.');
+            }
         } catch (err) {
-            console.error('Error storing profile on server:', err);
-            setError('Failed to log in on server. Please try again.');
+            setError(err?.response?.data?.error || 'Invalid password. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleCustomerSignUp = async (event) => {
+        event.preventDefault();
+        setError('');
+        setInfoMessage('');
+
+        const cleanDigits = signUpPhone.replace(/\D/g, '');
+        const dbPhone = cleanDigits.length === 11 && cleanDigits.startsWith('1') ? cleanDigits.slice(1) : cleanDigits;
+
+        if (!signUpFirstName.trim() || !signUpLastName.trim() || !signUpEmail.trim() || !dbPhone || !signUpPassword) {
+            setError('Please fill in all required fields.');
+            return;
+        }
+
+        if (dbPhone.length !== 10) {
+            setError('Please enter a valid 10-digit phone number.');
+            return;
+        }
+
+        if (signUpPassword.length < 4) {
+            setError('Password must be at least 4 characters.');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const currentApiUrl = getResolvedBaseUrl();
+            const res = await axios.post(`${currentApiUrl}/auth/customer/signup`, {
+                first_name: signUpFirstName.trim(),
+                last_name: signUpLastName.trim(),
+                email: signUpEmail.trim().toLowerCase(),
+                phone_number: dbPhone,
+                password: signUpPassword,
+                sms_opt_in: signUpSmsOptIn
+            });
+
+            const createdProfile = res.data?.profile;
+            if (createdProfile?.user_guid) {
+                await refreshProfile(createdProfile.user_guid);
+                auth.login();
+                if (requestedProtectedPath) {
+                    navigate(requestedProtectedPath, { replace: true });
+                } else {
+                    navigate('/', { replace: true });
+                }
+            }
+        } catch (err) {
+            setError(err?.response?.data?.error || 'Unable to create your account. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -244,20 +360,24 @@ const AuthenticateUser = () => {
                 const currentApiUrl = getResolvedBaseUrl();
                 await axios.post(`${currentApiUrl}/profile/${profile.user_guid}`, {});
             }
-        } catch (err) {
-            console.error('Error clearing profile on server:', err);
+        } catch {
+            // Ignore sign-out errors
         } finally {
             localStorage.removeItem('userSession');
             setProfile(null);
             auth.logout();
             setLoading(false);
+            navigate('/', { replace: true });
         }
     };
 
-    const handleBackToPhone = () => {
+    const handleBackToLookup = () => {
         setStep(1);
+        setMatchedSource(null);
+        setAuthenticatedUser(null);
         setOtpInput('');
         setGeneratedOtp('');
+        setCustomerPassword('');
         setOtpAttempts(0);
         setError('');
         setInfoMessage('');
@@ -274,24 +394,39 @@ const AuthenticateUser = () => {
     return (
         <Card>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '0.75rem' }}>
-                <img 
-                    src={appLogo} 
-                    alt="Triple Great Logo" 
-                    style={{ 
-                        width: '76px', 
-                        height: '76px', 
-                        borderRadius: '16px', 
+                <img
+                    src={appLogo}
+                    alt="Triple Great Logo"
+                    style={{
+                        width: '76px',
+                        height: '76px',
+                        borderRadius: '16px',
                         objectFit: 'cover',
                         boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
                         border: '2px solid rgba(23, 75, 15, 0.3)',
                         marginBottom: '0.75rem'
-                    }} 
+                    }}
                 />
                 <h2 className={classes.authentication} style={{ margin: 0 }}>Triple Great</h2>
             </div>
-            <div style={{ textAlign: 'center', fontSize: '0.85rem', color: '#64748b', marginBottom: '1rem' }}>
-                Access from your <strong>{detectedDeviceType}</strong>
-            </div>
+
+            {requestedProtectedPath && !auth.isLoggedIn && (
+                <div
+                    style={{
+                        backgroundColor: '#fffbeb',
+                        border: '1px solid #fde68a',
+                        color: '#92400e',
+                        padding: '0.6rem 0.9rem',
+                        borderRadius: '8px',
+                        fontSize: '0.84rem',
+                        textAlign: 'center',
+                        marginBottom: '0.85rem'
+                    }}
+                >
+                    Please sign in to continue.
+                </div>
+            )}
+
             <hr style={{ marginBottom: '1.25rem', borderColor: '#ccc' }} />
 
             {auth.isLoggedIn ? (
@@ -307,25 +442,26 @@ const AuthenticateUser = () => {
                 </div>
             ) : (
                 <>
-                    {/* Navigation Tabs: Primary Account Login vs WhatsApp-style Linked Device */}
+                    {/* Navigation Tabs: Sign In vs Create Account vs Link Device */}
                     <div style={{
                         display: 'flex',
-                        gap: '8px',
+                        gap: '6px',
                         marginBottom: '1.5rem',
                         backgroundColor: '#f1f5f9',
                         padding: '4px',
-                        borderRadius: '8px'
+                        borderRadius: '8px',
+                        flexWrap: 'wrap'
                     }}>
                         <button
                             type="button"
                             onClick={() => { setAuthMode('phone'); setError(''); setInfoMessage(''); }}
                             style={{
                                 flex: 1,
-                                padding: '10px 12px',
+                                padding: '10px 10px',
                                 border: 'none',
                                 borderRadius: '6px',
                                 fontWeight: '700',
-                                fontSize: '0.9rem',
+                                fontSize: '0.86rem',
                                 cursor: 'pointer',
                                 backgroundColor: authMode === 'phone' ? '#ffffff' : 'transparent',
                                 color: authMode === 'phone' ? '#1e293b' : '#64748b',
@@ -333,18 +469,37 @@ const AuthenticateUser = () => {
                                 transition: 'all 0.15s ease'
                             }}
                         >
-                            🔑 Account Sign In (SMS)
+                            Sign In
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => { setAuthMode('signup'); setError(''); setInfoMessage(''); }}
+                            style={{
+                                flex: 1,
+                                padding: '10px 10px',
+                                border: 'none',
+                                borderRadius: '6px',
+                                fontWeight: '700',
+                                fontSize: '0.86rem',
+                                cursor: 'pointer',
+                                backgroundColor: authMode === 'signup' ? '#ffffff' : 'transparent',
+                                color: authMode === 'signup' ? '#174b0f' : '#64748b',
+                                boxShadow: authMode === 'signup' ? '0 2px 4px rgba(0,0,0,0.1)' : 'none',
+                                transition: 'all 0.15s ease'
+                            }}
+                        >
+                            Create Account
                         </button>
                         <button
                             type="button"
                             onClick={() => { setAuthMode('link'); setError(''); setInfoMessage(''); }}
                             style={{
                                 flex: 1,
-                                padding: '10px 12px',
+                                padding: '10px 10px',
                                 border: 'none',
                                 borderRadius: '6px',
                                 fontWeight: '700',
-                                fontSize: '0.9rem',
+                                fontSize: '0.86rem',
                                 cursor: 'pointer',
                                 backgroundColor: authMode === 'link' ? '#ffffff' : 'transparent',
                                 color: authMode === 'link' ? '#16a34a' : '#64748b',
@@ -352,38 +507,37 @@ const AuthenticateUser = () => {
                                 transition: 'all 0.15s ease'
                             }}
                         >
-                            🔗 Link This {detectedDeviceType} (QR Code)
+                            Link {detectedDeviceType}
                         </button>
                     </div>
 
                     {error && (
-                        <div style={{ color: '#dc3545', marginBottom: '1rem', fontWeight: '500', textAlign: 'center' }}>
+                        <div style={{ color: '#dc3545', marginBottom: '1rem', fontWeight: '500', textAlign: 'center', fontSize: '0.9rem' }}>
                             {error}
                         </div>
                     )}
 
                     {infoMessage && (
-                        <div style={{ color: '#28a745', marginBottom: '1rem', fontWeight: '500', textAlign: 'center' }}>
+                        <div style={{ color: '#28a745', marginBottom: '1rem', fontWeight: '500', textAlign: 'center', fontSize: '0.9rem' }}>
                             {infoMessage}
                         </div>
                     )}
 
-
-                    {/* MODE 1: Standard Account Login with Phone Number & SMS */}
+                    {/* MODE 1: Sign In */}
                     {authMode === 'phone' && (
                         <>
                             {step === 1 && (
-                                <form className={classes.form} onSubmit={handlePhoneSubmit}>
+                                <form className={classes.form} onSubmit={handleLookupSubmit}>
                                     <div style={{ display: 'flex', flexDirection: 'column', marginBottom: '1.5rem' }}>
-                                        <label htmlFor="phone" style={{ fontWeight: '600', marginBottom: '0.5rem', color: '#333' }}>
-                                            Registered Phone Number:
+                                        <label htmlFor="identifier" style={{ fontWeight: '600', marginBottom: '0.5rem', color: '#333' }}>
+                                            Phone Number or Email:
                                         </label>
                                         <input
                                             type="text"
-                                            id="phone"
-                                            placeholder="+1 (555) 000-0000"
-                                            value={phoneNumber}
-                                            onChange={(e) => setPhoneNumber(e.target.value)}
+                                            id="identifier"
+                                            placeholder="Enter your phone number or email"
+                                            value={identifier}
+                                            onChange={(e) => setIdentifier(e.target.value)}
                                             disabled={loading}
                                             required
                                             style={{
@@ -395,24 +549,21 @@ const AuthenticateUser = () => {
                                                 boxSizing: 'border-box'
                                             }}
                                         />
-                                        <span style={{ fontSize: '0.8rem', color: '#666', marginTop: '0.4rem' }}>
-                                            Primary device login for phones, tablets, or computers
-                                        </span>
                                     </div>
 
                                     <div className={classes.buttonBar}>
                                         <Button type="submit" disabled={loading}>
-                                            {loading ? 'Sending Code...' : 'Send SMS Code'}
+                                            {loading ? 'Please wait...' : 'Continue'}
                                         </Button>
                                     </div>
                                 </form>
                             )}
 
-                            {step === 2 && (
-                                <form className={classes.form} onSubmit={handleOtpSubmit}>
+                            {step === 2 && matchedSource === 'users_table' && (
+                                <form className={classes.form} onSubmit={handleStaffOtpSubmit}>
                                     <div style={{ display: 'flex', flexDirection: 'column', marginBottom: '1.5rem' }}>
                                         <label htmlFor="otp" style={{ fontWeight: '600', marginBottom: '0.5rem', color: '#333' }}>
-                                            Verification Code (6-digit):
+                                            6-Digit Verification Code:
                                         </label>
                                         <input
                                             type="text"
@@ -440,9 +591,45 @@ const AuthenticateUser = () => {
 
                                     <div className={classes.buttonBar} style={{ flexDirection: 'column', gap: '10px' }}>
                                         <Button type="submit" disabled={loading || isLocked}>
-                                            {loading ? 'Verifying...' : 'Verify & Login'}
+                                            {loading ? 'Verifying...' : 'Verify & Sign In'}
                                         </Button>
-                                        <Button inverse type="button" onClick={handleBackToPhone} disabled={loading}>
+                                        <Button inverse type="button" onClick={handleBackToLookup} disabled={loading}>
+                                            Back
+                                        </Button>
+                                    </div>
+                                </form>
+                            )}
+
+                            {step === 2 && matchedSource === 'customers' && (
+                                <form className={classes.form} onSubmit={handleCustomerPasswordSubmit}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', marginBottom: '1.5rem' }}>
+                                        <label htmlFor="customer-password" style={{ fontWeight: '600', marginBottom: '0.5rem', color: '#333' }}>
+                                            {customerHasPassword ? 'Password:' : 'Create Password:'}
+                                        </label>
+                                        <input
+                                            type="password"
+                                            id="customer-password"
+                                            placeholder="Enter your password"
+                                            value={customerPassword}
+                                            onChange={(e) => setCustomerPassword(e.target.value)}
+                                            disabled={loading}
+                                            required
+                                            style={{
+                                                padding: '0.8rem',
+                                                border: '1px solid #ccc',
+                                                borderRadius: '6px',
+                                                fontSize: '1rem',
+                                                width: '100%',
+                                                boxSizing: 'border-box'
+                                            }}
+                                        />
+                                    </div>
+
+                                    <div className={classes.buttonBar} style={{ flexDirection: 'column', gap: '10px' }}>
+                                        <Button type="submit" disabled={loading}>
+                                            {loading ? 'Signing In...' : 'Sign In'}
+                                        </Button>
+                                        <Button inverse type="button" onClick={handleBackToLookup} disabled={loading}>
                                             Back
                                         </Button>
                                     </div>
@@ -451,14 +638,105 @@ const AuthenticateUser = () => {
                         </>
                     )}
 
-                    {/* MODE 2: WhatsApp-Style Companion Device Linking (For TV, Computer, Secondary Tablet) */}
+                    {/* MODE 2: Create Account (Customer information is personal and not tied to a business) */}
+                    {authMode === 'signup' && (
+                        <form className={classes.form} onSubmit={handleCustomerSignUp}>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                                <div>
+                                    <label style={{ fontWeight: '600', fontSize: '0.85rem', color: '#333', display: 'block', marginBottom: '0.3rem' }}>
+                                        First Name *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={signUpFirstName}
+                                        onChange={(e) => setSignUpFirstName(e.target.value)}
+                                        required
+                                        disabled={loading}
+                                        style={{ padding: '0.65rem', border: '1px solid #ccc', borderRadius: '6px', width: '100%', boxSizing: 'border-box' }}
+                                    />
+                                </div>
+                                <div>
+                                    <label style={{ fontWeight: '600', fontSize: '0.85rem', color: '#333', display: 'block', marginBottom: '0.3rem' }}>
+                                        Last Name *
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={signUpLastName}
+                                        onChange={(e) => setSignUpLastName(e.target.value)}
+                                        required
+                                        disabled={loading}
+                                        style={{ padding: '0.65rem', border: '1px solid #ccc', borderRadius: '6px', width: '100%', boxSizing: 'border-box' }}
+                                    />
+                                </div>
+                            </div>
+
+                            <div style={{ marginBottom: '0.75rem' }}>
+                                <label style={{ fontWeight: '600', fontSize: '0.85rem', color: '#333', display: 'block', marginBottom: '0.3rem' }}>
+                                    Email *
+                                </label>
+                                <input
+                                    type="email"
+                                    value={signUpEmail}
+                                    onChange={(e) => setSignUpEmail(e.target.value)}
+                                    required
+                                    disabled={loading}
+                                    style={{ padding: '0.65rem', border: '1px solid #ccc', borderRadius: '6px', width: '100%', boxSizing: 'border-box' }}
+                                />
+                            </div>
+
+                            <div style={{ marginBottom: '0.75rem' }}>
+                                <label style={{ fontWeight: '600', fontSize: '0.85rem', color: '#333', display: 'block', marginBottom: '0.3rem' }}>
+                                    Phone Number *
+                                </label>
+                                <input
+                                    type="tel"
+                                    value={signUpPhone}
+                                    onChange={(e) => setSignUpPhone(e.target.value)}
+                                    required
+                                    disabled={loading}
+                                    style={{ padding: '0.65rem', border: '1px solid #ccc', borderRadius: '6px', width: '100%', boxSizing: 'border-box' }}
+                                />
+                            </div>
+
+                            <div style={{ marginBottom: '0.75rem' }}>
+                                <label style={{ fontWeight: '600', fontSize: '0.85rem', color: '#333', display: 'block', marginBottom: '0.3rem' }}>
+                                    Password *
+                                </label>
+                                <input
+                                    type="password"
+                                    value={signUpPassword}
+                                    onChange={(e) => setSignUpPassword(e.target.value)}
+                                    required
+                                    disabled={loading}
+                                    style={{ padding: '0.65rem', border: '1px solid #ccc', borderRadius: '6px', width: '100%', boxSizing: 'border-box' }}
+                                />
+                            </div>
+
+                            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', color: '#475569', marginBottom: '1rem' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={signUpSmsOptIn}
+                                    onChange={(e) => setSignUpSmsOptIn(e.target.checked)}
+                                    disabled={loading}
+                                />
+                                Receive SMS booking confirmations and reminders
+                            </label>
+
+                            <div className={classes.buttonBar}>
+                                <Button type="submit" disabled={loading}>
+                                    {loading ? 'Creating Account...' : 'Create Account'}
+                                </Button>
+                            </div>
+                        </form>
+                    )}
+
+                    {/* MODE 3: Companion Device Linking (For TV, Computer, Secondary Tablet) */}
                     {authMode === 'link' && (
                         <div style={{ textAlign: 'center', padding: '0.5rem 0' }}>
                             {loading && !linkTicket ? (
-                                <p style={{ color: '#64748b' }}>Connecting to server & generating pairing ticket...</p>
+                                <p style={{ color: '#64748b' }}>Generating pairing code...</p>
                             ) : linkTicket ? (
                                 <div>
-                                    {/* QR Code */}
                                     <div style={{
                                         display: 'inline-block',
                                         padding: '16px',
@@ -475,7 +753,6 @@ const AuthenticateUser = () => {
                                         />
                                     </div>
 
-                                    {/* Pairing Code */}
                                     <div style={{ marginBottom: '1.25rem' }}>
                                         <span style={{ fontSize: '0.85rem', color: '#64748b', textTransform: 'uppercase', fontWeight: '700' }}>
                                             Pairing Code:
@@ -492,7 +769,6 @@ const AuthenticateUser = () => {
                                         </div>
                                     </div>
 
-                                    {/* Instructions */}
                                     <div style={{
                                         backgroundColor: '#f8fafc',
                                         border: '1px solid #e2e8f0',
@@ -507,13 +783,11 @@ const AuthenticateUser = () => {
                                         <strong>To link this {detectedDeviceType}:</strong>
                                         <ol style={{ margin: '6px 0 0', paddingLeft: '20px' }}>
                                             <li>Open this app on your already signed-in phone or tablet.</li>
-                                            <li>Tap <strong>📱 Linked Devices</strong> in the top header.</li>
+                                            <li>Tap <strong>Linked Devices</strong> in the top header.</li>
                                             <li>Enter the code <strong>{linkTicket.pairCode}</strong> above.</li>
-                                            <li>Session automatically ends after <strong>1 hour of inactiveness</strong>.</li>
                                         </ol>
                                     </div>
 
-                                    {/* Status Message */}
                                     <div style={{
                                         marginBottom: '1rem',
                                         padding: '8px 12px',
@@ -523,15 +797,14 @@ const AuthenticateUser = () => {
                                         backgroundColor: linkingStatus === 'approved' ? '#dcfce7' : linkingStatus === 'expired' ? '#fee2e2' : '#eff6ff',
                                         color: linkingStatus === 'approved' ? '#16a34a' : linkingStatus === 'expired' ? '#dc2626' : '#2563eb',
                                     }}>
-                                        {linkingStatus === 'waiting' && '⏳ Waiting for authorization from your phone or tablet...'}
-                                        {linkingStatus === 'approved' && '✅ Approved! Launching session...'}
-                                        {linkingStatus === 'expired' && '⚠️ Code expired. Please click "Refresh Code" below.'}
+                                        {linkingStatus === 'waiting' && 'Waiting for authorization from your phone or tablet...'}
+                                        {linkingStatus === 'approved' && 'Approved! Launching session...'}
+                                        {linkingStatus === 'expired' && 'Code expired. Please click "Refresh Code" below.'}
                                     </div>
 
-                                    {/* Status & Expiry */}
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                         <span style={{ fontSize: '0.85rem', color: ticketTimeLeft > 60 ? '#64748b' : '#dc2626' }}>
-                                            ⏱️ Code expires in: <strong>{formatCountdown(ticketTimeLeft)}</strong>
+                                            Code expires in: <strong>{formatCountdown(ticketTimeLeft)}</strong>
                                         </span>
 
                                         <button
@@ -548,7 +821,7 @@ const AuthenticateUser = () => {
                                                 fontWeight: '600'
                                             }}
                                         >
-                                            🔄 Refresh Code
+                                            Refresh Code
                                         </button>
                                     </div>
                                 </div>

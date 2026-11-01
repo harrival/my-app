@@ -1,7 +1,17 @@
-import React, { createContext, useContext, useState, useEffect, useRef, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import { BASE_URL } from '../../shared/Utils/apiConfig';
 import { useRefresh } from './RefreshContext';
+
+export const ELEVATED_PERMISSION_GROUPS = ['admin', 'supervisor', 'agent'] as const;
+export type EffectiveRole = 'Admin' | 'Supervisor' | 'Agent' | 'Customer';
+
+export interface CustomerPrefill {
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone_number: string;
+}
 
 export interface UserProfile {
   id: number;
@@ -28,6 +38,22 @@ interface UserProfileContextType {
   loading: boolean;
   isLinkedDevice: boolean;
   isTV: boolean;
+  /** True if profile.permission_group === 'Admin' or profile.is_admin === true */
+  isAdmin: boolean;
+  /** True if profile.permission_group === 'Supervisor' */
+  isSupervisor: boolean;
+  /** True if profile.permission_group === 'Agent' */
+  isAgent: boolean;
+  /** True if isAdmin || isSupervisor || isAgent */
+  isElevatedStaff: boolean;
+  /** True if permission_group is NOT in ('Admin', 'Supervisor', 'Agent') and !is_admin, or unauthenticated */
+  isCustomer: boolean;
+  /** Resolved canonical role: 'Admin' | 'Supervisor' | 'Agent' | 'Customer' */
+  effectiveRole: EffectiveRole;
+  /** Checks whether the current profile can access the Supervisor Control Panel for a given business */
+  canAccessSupervisorPanel: (targetBusiness?: string | null) => boolean;
+  /** Convenience contact details for auto-filling customer checkout forms (decoupled from users_table) */
+  customerPrefill: CustomerPrefill | null;
   setProfile: (profile: UserProfile | null) => void;
   refreshProfile: (loginUserGuid?: string) => Promise<void>;
 }
@@ -250,13 +276,16 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
       }
     }
 
-    // Fallback: try to parse business name from captured path
+    // Fallback: try to parse business name from captured path (excluding public /book/:business portals)
     if (!userGuid) {
       const segments = originalPath.split('/').filter(Boolean);
       if (segments.length > 0) {
         const firstSegment = segments[0];
-        if (firstSegment.toLowerCase() !== 'auth') {
-          business = firstSegment;
+        const lowerFirst = firstSegment.toLowerCase();
+        if (lowerFirst === 'admin' && segments.length >= 2) {
+          business = decodeURIComponent(segments[1]);
+        } else if (lowerFirst !== 'auth' && lowerFirst !== 'book' && lowerFirst !== 'admin') {
+          business = decodeURIComponent(firstSegment);
         }
       }
     }
@@ -283,7 +312,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
             event_id: responseRep.data.event_id
           };
         }
-      } else if (business) {
+      } else if (business && existingSession.loggedIn) {
         const response = await axios.get<UserProfile>(`${BASE_URL}/active-profile/${business}`);
         if (response.data && Object.keys(response.data).length > 0) {
           profileData = response.data;
@@ -305,6 +334,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
           userGuid: profileData.user_guid,
           business: profileData.business,
           permissionGroup: profileData.permission_group,
+          isAdmin: Boolean(profileData.is_admin),
           isLinkedDevice: isLinked,
           isTV,
           deviceType: isTV ? 'Television' : (existingSession.deviceType === 'Television' ? 'Mobile' : (existingSession.deviceType || 'Web')),
@@ -335,6 +365,57 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   const isTV = checkIsTV();
 
+  // Role classification:
+  // - isAdmin: profile.permission_group === 'Admin' or profile.is_admin === true
+  // - isSupervisor: profile.permission_group === 'Supervisor'
+  // - isAgent: profile.permission_group === 'Agent'
+  // - isCustomer: not Admin, Supervisor, or Agent (or unauthenticated)
+  const isAdmin = useMemo(() => {
+    if (!profile) return false;
+    return profile.permission_group === 'Admin' || profile.is_admin === true;
+  }, [profile]);
+
+  const isSupervisor = useMemo(() => {
+    if (!profile) return false;
+    return profile.permission_group === 'Supervisor';
+  }, [profile]);
+
+  const isAgent = useMemo(() => {
+    if (!profile) return false;
+    return profile.permission_group === 'Agent';
+  }, [profile]);
+
+  const isElevatedStaff = isAdmin || isSupervisor || isAgent;
+  const isCustomer = !isElevatedStaff;
+
+  const effectiveRole: EffectiveRole = useMemo(() => {
+    if (isAdmin) return 'Admin';
+    if (isSupervisor) return 'Supervisor';
+    if (isAgent) return 'Agent';
+    return 'Customer';
+  }, [isAdmin, isSupervisor, isAgent]);
+
+  const canAccessSupervisorPanel = useCallback(
+    (targetBusiness?: string | null): boolean => {
+      if (!isElevatedStaff) return false;
+      const assigned = String(profile?.business || '').trim().toLowerCase();
+      if (!assigned) return false;
+      if (!targetBusiness) return true;
+      return assigned === String(targetBusiness).trim().toLowerCase();
+    },
+    [isElevatedStaff, profile?.business]
+  );
+
+  const customerPrefill: CustomerPrefill | null = useMemo(() => {
+    if (!profile || !isCustomer) return null;
+    return {
+      first_name: profile.first_name || '',
+      last_name: profile.last_name || '',
+      email: profile.email || '',
+      phone_number: profile.phone_number || '',
+    };
+  }, [profile, isCustomer]);
+
   return (
     <UserProfileContext.Provider value={{
       profile,
@@ -343,6 +424,14 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
       loading,
       isLinkedDevice,
       isTV,
+      isAdmin,
+      isSupervisor,
+      isAgent,
+      isElevatedStaff,
+      isCustomer,
+      effectiveRole,
+      canAccessSupervisorPanel,
+      customerPrefill,
       setProfile,
       refreshProfile
     }}>

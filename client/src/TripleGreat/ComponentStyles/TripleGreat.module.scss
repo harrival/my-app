@@ -1,0 +1,354 @@
+.portalWrapper {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding: 20px 18px 48px;
+  color: #143611;
+}
+
+.tenantBanner {
+  background: linear-gradient(135deg, #174b0f 0%, #246a19 100%);
+  color: #ffffff;
+  border-radius: 16px;
+  padding: 24px 28px;
+  box-shadow: 0 10px 26px rgba(23, 75, 15, 0.22);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 22px;
+}
+
+.bannerTitleGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+
+  h1 {
+    margin: 0;
+    font-size: 1.75rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+
+  p {
+    margin: 0;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.95rem;
+  }
+}
+
+.badgeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  color: #ffffff;
+}
+
+.pillHighlight {
+  background: #dcfce7;
+  color: #14532d;
+  border-color: #86efac;
+}
+
+.pillWarn {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fde68a;
+}
+
+.switcherBar {
+  background: #ffffff;
+  border: 1px solid #d1e7cc;
+  border-radius: 12px;
+  padding: 12px 18px;
+  margin-bottom: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+.switcherControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+
+  input {
+    padding: 7px 12px;
+    border-radius: 8px;
+    border: 1px solid #b6d7ae;
+    font-size: 0.88rem;
+    min-width: 170px;
+  }
+}
+
+.tabBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #d1e7cc;
+  padding-bottom: 10px;
+}
+
+.tabBtn {
+  padding: 9px 16px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  background: rgba(255, 255, 255, 0.7);
+  color: #1f4d18;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    background: #ffffff;
+    border-color: #a3cfa0;
+  }
+}
+
+.tabBtnActive {
+  background: #174b0f;
+  color: #ffffff;
+  border-color: #174b0f;
+
+  &:hover {
+    background: #1e5f14;
+    color: #ffffff;
+  }
+}
+
+.gridTwo {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+  gap: 18px;
+  margin-bottom: 20px;
+}
+
+.gridThree {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.card {
+  background: #ffffff;
+  border: 1px solid #d5ead0;
+  border-radius: 14px;
+  padding: 20px 22px;
+  box-shadow: 0 4px 14px rgba(20, 54, 17, 0.05);
+
+  h3 {
+    margin: 0 0 8px 0;
+    font-size: 1.12rem;
+    color: #143611;
+  }
+
+  p {
+    margin: 0 0 12px 0;
+    color: #496546;
+    font-size: 0.9rem;
+    line-height: 1.45;
+  }
+}
+
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.metricBox {
+  background: #f4fbf2;
+  border: 1px solid #cce5c6;
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  span {
+    font-size: 0.76rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #4c6b48;
+    font-weight: 700;
+  }
+
+  strong {
+    font-size: 1.35rem;
+    color: #174b0f;
+    font-weight: 800;
+  }
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px;
+  margin-top: 12px;
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+
+  label {
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #244c1e;
+  }
+
+  input,
+  select,
+  textarea {
+    padding: 9px 12px;
+    border-radius: 8px;
+    border: 1px solid #bdd9b6;
+    font-size: 0.92rem;
+    background: #ffffff;
+    color: #143611;
+
+    &:focus {
+      outline: none;
+      border-color: #174b0f;
+      box-shadow: 0 0 0 2px rgba(23, 75, 15, 0.15);
+    }
+  }
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 8px;
+
+  input[type='checkbox'] {
+    width: 17px;
+    height: 17px;
+    accent-color: #174b0f;
+  }
+
+  label {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #1e4618;
+    cursor: pointer;
+  }
+}
+
+.primaryBtn {
+  background: #174b0f;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+
+  &:hover:not(:disabled) {
+    background: #216616;
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}
+
+.secondaryBtn {
+  background: #edf7ea;
+  color: #174b0f;
+  border: 1px solid #b5d6ae;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+
+  &:hover {
+    background: #dff1da;
+  }
+}
+
+.statusAlert {
+  padding: 11px 15px;
+  border-radius: 10px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin: 14px 0;
+}
+
+.statusSuccess {
+  background: #dcfce7;
+  color: #14532d;
+  border: 1px solid #86efac;
+}
+
+.statusError {
+  background: #fee2e2;
+  color: #991b1b;
+  border: 1px solid #fca5a5;
+}
+
+.auditTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.86rem;
+  margin-top: 10px;
+
+  th,
+  td {
+    text-align: left;
+    padding: 10px 12px;
+    border-bottom: 1px solid #e3f0e0;
+  }
+
+  th {
+    background: #f4fbf2;
+    color: #214d1b;
+    font-weight: 700;
+  }
+}
+
+.diffPre {
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 12px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  overflow-x: auto;
+  max-height: 240px;
+  margin: 6px 0 0 0;
+}
+

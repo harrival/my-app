@@ -3,7 +3,7 @@ import Card from '../UI/Card/Card';
 import { useUserProfile } from '../shared/Context/UserProfileContext';
 
 const ProfilePage = () => {
-    const { profile, hasProfile, loading } = useUserProfile();
+    const { profile, hasProfile, loading, isElevatedStaff } = useUserProfile();
 
     if (loading) {
         return (
@@ -20,7 +20,7 @@ const ProfilePage = () => {
     const email = profile?.email || '';
     const phoneNumber = profile?.phone_number || profile?.phoneNumber || '';
     const address = profile?.address || '';
-    const business = profile?.business || profile?.business_value || 'N/A';
+    const business = profile?.business || '';
 
     return (
         <>
@@ -30,10 +30,15 @@ const ProfilePage = () => {
                         <h2>Welcome back, {firstName}!</h2>
                         <div style={{ marginTop: '1.5rem', lineHeight: '2' }}>
                             <p><strong>Full Name:</strong> {firstName} {lastName}</p>
-                            <p><strong>Email:</strong> {email || 'N/A'}</p>
-                            <p><strong>Phone Number:</strong> {phoneNumber || 'N/A'}</p>
-                            <p><strong>Address:</strong> {address || 'N/A'}</p>
-                            <p><strong>Business:</strong> <span style={{ color: '#28a745', fontWeight: 'bold' }}>{business}</span></p>
+                            <p><strong>Email:</strong> {email || '—'}</p>
+                            <p><strong>Phone Number:</strong> {phoneNumber || '—'}</p>
+                            {address && <p><strong>Address:</strong> {address}</p>}
+                            {isElevatedStaff && business && (
+                                <p>
+                                    <strong>Location:</strong>{' '}
+                                    <span style={{ color: '#28a745', fontWeight: 'bold' }}>{business}</span>
+                                </p>
+                            )}
                         </div>
                     </div>
                 ) : (
@@ -47,6 +52,6 @@ const ProfilePage = () => {
             </Card>
         </>
     );
-}
+};
 
 export default ProfilePage;

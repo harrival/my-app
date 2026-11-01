@@ -1,0 +1,309 @@
+﻿Harmonized System Specification
+Item Reservation Engine & Supervisor Control Panel
+Technical Architecture & System Overview
+________________
+
+
+1. System Architecture & Harmonized Domain Model
+This document specifies the unified architecture connecting the public customer booking experience with the internal supervisor administration portal. Every configuration made in the supervisor portal—inventory adjustments, calendar blackouts, content modifications, and policy overrides—directly drives and updates the public reservation engine in real time.
+Core Synchronizations
+* Inventory & Blackouts: Customer availability calculations dynamically combine physical inventory counts, active reservations, unexpired checkout holds, and supervisor-defined date blackouts.
+* Reservation Lifecycle & Policy Overrides: Customer self-service cancellations and reschedules adhere strictly to the automated 7-day policy (100% refund prior to 7 days, 25% fee retained within 7 days). Supervisors possess role-based override capabilities to waive fees or manually adjust schedules.
+* Content Management System (CMS) & Public Sync: Supervisor updates to announcements, vision and mission statements, blog posts, and photo/video media invalidate the application edge cache and immediately update the public booking interface.
+
+
+________________
+
+
+2. Storyboard 1: Customer Booking, Inventory Countdown, and Self-Service Lifecycle
+Metadata Attribute
+	Details
+	Story ID
+	INV-102
+	Epic
+	Item Reservation & Customer Experience
+	Title
+	Date-Range Item Availability, Real-Time Inventory Countdown, Flexible Checkout, and Policy-Driven Lifecycle
+	Status
+	Ready for Development
+	Description
+* As a customer booking an item,
+* I want to select a date range, see real-time inventory counts (accounting for active bookings, holds, and blackouts), temporarily hold an item during checkout, choose between guest or account checkout, and manage cancellations or reschedules,
+* So that I can secure my booking with flexible authentication and transparent, automated change policies.
+Acceptance Criteria
+n
+Scenario: Date-range availability query with blackout enforcement
+Given an item with a configured pool of identical units
+When a customer selects a start and end date range
+Then the system checks overlapping confirmed reservations, active checkout holds, and supervisor blackouts
+And displays the exact remaining unit count for that window
+And disables date selection if any date in the range is blacked out or fully booked.
+
+
+Scenario: Temporary inventory reservation hold
+Given available inventory for the selected date range
+When the customer proceeds to checkout
+Then the system places an atomic 10-minute hold on one inventory unit
+And decrements visible availability for subsequent shoppers searching overlapping dates
+And starts an on-screen expiration countdown timer.
+
+
+Scenario: Checkout authentication choice (Guest vs. Account)
+Given an active reservation hold
+When the customer reaches the checkout view
+Then the system presents two options: "Checkout as Guest" and "Sign In / Create Account"
+And guest checkout requires only contact information, phone, and payment details
+And account creation allows setting credentials and associates the booking to the customer profile.
+
+
+Scenario: Automated free cancellation (>= 7 days prior)
+Given a confirmed customer reservation with start date T_start
+When the customer requests cancellation at timestamp T_cancel >= T_start - 7 days (168 hours)
+Then the system issues a 100% refund of the original transaction amount
+And updates the reservation status to CANCELLED
+And immediately restores unit availability to the general pool.
+
+
+Scenario: Automated late cancellation (< 7 days prior)
+Given a confirmed customer reservation with start date T_start
+When the customer requests cancellation at timestamp T_cancel < T_start - 7 days
+Then the system retains 25% of the original charged fee as a cancellation fee
+And issues an automated partial refund of 75% to the original payment method
+And marks the reservation CANCELLED and restores unit availability.
+
+
+Scenario: Policy-driven self-service rescheduling
+Given a confirmed customer reservation
+When the customer selects an alternate available date range
+Then if requested >= 7 days before original start date, the schedule updates with no fee
+And if requested < 7 days before original start date, the system charges a 25% modification fee before confirming the new dates.
+
+
+### Engineering Task Breakdown
+
+
+#### Database & Schema Design (PostgreSQL)
+
+
+* [ ] **DB-01:** Update `reservations` table to track status transitions (`HOLD`, `CONFIRMED`, `CANCELLED`, `RESCHEDULED`), `cancelled_at TIMESTAMPTZ`, `cancellation_fee NUMERIC(10,2)`, and `refund_id VARCHAR(255)`.
+
+
+* [ ] **DB-02:** Configure `btree_gist` exclusion constraints so `CANCELLED` bookings do not count toward overlapping limits.
+
+
+* [ ] **DB-03:** Design `orders` schema supporting optional `user_id` foreign keys, `guest_email`, and an `is_guest BOOLEAN DEFAULT FALSE` flag.
+
+
+#### Backend Services (Node.js / Express)
+
+
+* [ ] **BE-01:** Implement `GET /api/items/:id/availability?startDate=X&endDate=Y` calculating: `available_units = total_active_units - count(active_bookings + active_holds) - (is_blacked_out ? infinity : 0)`.
+
+
+* [ ] **BE-02:** Implement `POST /api/reservations/hold` with Redis distributed locks (`SET resource:hold:{unit_id} EX 600 NX`) to reserve 1 unit during checkout.
+
+
+* [ ] **BE-03:** Implement `POST /api/checkout/process` with branch routing for guest orders versus new registered account entity creation.
+
+
+* [ ] **BE-04:** Implement `POST /api/reservations/:id/cancel` computing lead time delta and issuing 100% or 75% Stripe refunds accordingly.
+
+
+* [ ] **BE-05:** Implement `POST /api/reservations/:id/reschedule` validating new dates and enforcing the 25% change fee if within the 7-day cutoff.
+
+
+#### Frontend Implementation (React / TypeScript)
+
+
+* [ ] **FE-01:** Build `DateRangeSelector` validating start and end dates against the real-time availability API.
+
+
+* [ ] **FE-02:** Build `InventoryCounterBadge` rendering real-time stock status and out-of-stock indicators.
+
+
+* [ ] **FE-03:** Build `CheckoutAuthPicker` presenting "Continue as Guest" and "Create Account" options without resetting the cart or hold session.
+
+
+* [ ] **FE-04:** Build `BookingManagementView` accessible via authenticated account or secure tokenized guest link.
+
+
+* [ ] **FE-05:** Build `CancelBookingModal` and `RescheduleModal` rendering real-time fee breakdowns and policy alerts.
+
+
+---
+
+
+# 3. Storyboard 2: Supervisor Control Panel, Inventory Settings & CMS
+
+
+| Metadata Attribute | Details |
+
+
+| :--- | :--- |
+
+
+| **Story ID** | ADM-201 |
+
+
+| **Epic** | Back-Office Administration & Operations |
+
+
+| **Title** | Supervisor Control Panel: Inventory Configuration, Calendar Blackouts, Customer Overrides, and CMS Sync |
+
+
+| **Status** | Ready for Development |
+
+
+### Description
+
+
+* **As a** supervisor,
+
+
+* **I want to** configure inventory capacity, block calendar dates, oversee customer bookings with policy overrides, and publish dynamic content (blogs, announcements, vision/mission, media),
+
+
+* **So that** operations run smoothly and any administrative update immediately propagates to the public booking page.
+
+
+### Acceptance Criteria
+
+
+```gherkin
+
+
+Scenario: Role-based access control (RBAC) to settings
+
+
+  Given an authenticated user
+
+
+  When the user accesses "/admin/settings" or calls "/api/admin/*" endpoints
+
+
+  Then access is granted only if the user has the "SUPERVISOR" role
+
+
+  And unauthenticated or non-supervisor users receive a 403 Forbidden error.
+
+
+Scenario: Inventory pool configuration and expansion
+
+
+  Given a supervisor in the inventory administration panel
+
+
+  When the supervisor modifies active units or adds a new inventory unit
+
+
+  Then the total unit count updates in the database
+
+
+  And the public booking engine updates the capacity denominator immediately.
+
+
+Scenario: Operational date blackout enforcement
+
+
+  Given a supervisor managing calendar dates
+
+
+  When the supervisor selects a date range and marks it as blacked out
+
+
+  Then the system records the blackout range
+
+
+  And the customer date picker instantly disables those dates and rejects concurrent holds.
+
+
+Scenario: Supervisor override for customer reservations
+
+
+  Given an existing customer reservation
+
+
+  When the supervisor modifies the reservation dates or cancels it
+
+
+  Then the supervisor can choose to enforce standard policy or check "Waive Fees"
+
+
+  And waiving fees triggers a 100% refund regardless of the 7-day rule.
+
+
+Scenario: Dynamic CMS content propagation
+
+
+  Given a supervisor publishing blog posts, announcements, vision/mission statements, or media
+
+
+  When the supervisor submits changes
+
+
+  Then content records update, application cache is invalidated, and the public booking page renders the new content on the next request.
+Engineering Task Breakdown
+Database & Schema Design (PostgreSQL)
+* DB-04: Add role VARCHAR(50) DEFAULT 'CUSTOMER' to users with an index on role.
+* DB-05: Create inventory_blackouts table (item_id, date_range DATERANGE, reason TEXT, created_by_user_id) with a GIST index.
+* DB-06: Create cms_content (key-value store for banners, mission, vision), cms_posts (blog articles), and cms_media (photos, videos, dimensions, MIME types).
+* DB-07: Create supervisor_audit_logs tracking user ID, action type, target entity ID, timestamp, and metadata payload.
+Backend Services & RBAC (Node.js / Express)
+* BE-06: Implement requireRole('SUPERVISOR') middleware validating JWT claims.
+* BE-07: Implement inventory and blackout endpoints (POST /api/admin/inventory/units, POST /api/admin/inventory/blackout, DELETE /api/admin/inventory/blackout/:id).
+* BE-08: Implement supervisor reservation management (GET /api/admin/reservations, PATCH /api/admin/reservations/:id, POST /api/admin/reservations/:id/cancel with waive_fees flag).
+* BE-09: Implement CMS and media upload endpoints with presigned S3/GCS URL generation.
+* BE-10: Implement Redis cache invalidation triggers upon CMS or inventory mutations.
+Frontend Implementation (React / TypeScript)
+* FE-06: Build SupervisorRouteGuard protecting administrative views.
+* FE-07: Build InventoryConfigView with unit management and an interactive drag-to-select blackout calendar.
+* FE-08: Build SupervisorReservationDashboard with search, filter, manual reschedule, and cancellation with fee waiver checkbox.
+* FE-09: Build CMSManagementView supporting announcement banners, vision/mission editors, Markdown blog publishing, and media file uploads.
+* FE-10: Update the customer booking page to dynamically consume active announcements, footer mission statements, and media galleries.
+
+
+________________
+
+
+4. Harmonized Data Schema & System State Machine
+Unified Data Entities
+* items: Catalog metadata, default daily rate, and deposit requirements.
+* item_units: Physical serialized units linked to items with active status.
+* reservations: Date range (daterange), unit assignment, customer contact/user reference, and lifecycle state (HOLD, CONFIRMED, CANCELLED, RESCHEDULED).
+* inventory_blackouts: Administrative blackout date ranges preventing reservations.
+* cms_content / cms_posts / cms_media: Dynamic marketing and operational content displayed across public pages.
+* supervisor_audit_logs: Administrative action log recording overrides, fee waivers, and setting changes.
+Reservation Lifecycle Dynamics
+State
+	Transition Trigger
+	Timeout / Validation
+	System Actions & Effects
+	HOLD
+	Customer initiates checkout
+	10-Minute Redis TTL Expiration
+	Locks unit availability; decrements available pool count; displays countdown timer.
+	CONFIRMED
+	Payment webhook or Supervisor creation
+	Instant verification
+	Persists reservation permanently; marks unit unavailable for selected date range.
+	CANCELLED
+	Customer self-service or Supervisor override
+	Policy rule check (T-7 Days)
+	Reclaims unit; calculates refund (100% or 75% unless waived); invalidates holds.
+	RESCHEDULED
+	Customer change or Supervisor override
+	Availability check for new range
+	Re-evaluates overlaps; applies 25% change fee if <7 days (unless waived by Supervisor).
+	
+
+________________
+
+
+5. Verification Checklist & Guardrails
+* Database Integrity: PostgreSQL GIST exclusion constraints prevent overlapping active reservations for the same unit.
+* Blackout Priority: Blackout ranges instantly invalidate availability and block concurrent holds.
+* Financial Precision: All fee and refund calculations are executed in integer cents:
+   * cancellation_fee_cents = round(original_amount_cents * 0.25)
+   * refund_amount_cents = original_amount_cents - cancellation_fee_cents
+* Role Protection: All /api/admin/* endpoints strictly enforce supervisor authorization at the gateway and middleware layers.
+* Cache Consistency: Every supervisor update publishes a cache-bust event to ensure immediate visibility on the customer booking page.

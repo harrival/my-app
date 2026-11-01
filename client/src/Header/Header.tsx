@@ -17,12 +17,21 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = (props) => {
     const auth = useContext(AuthContext);
-    const { profile, setProfile, isLinkedDevice, isTV } = useUserProfile();
+    const {
+        profile,
+        setProfile,
+        isLinkedDevice,
+        isTV,
+        isAdmin,
+        isSupervisor,
+        isAgent: isAgentRole,
+        isElevatedStaff
+    } = useUserProfile();
     const navigate = useNavigate();
 
-    const business = profile?.business || "non_business";
-    const permissionGroup = profile?.permission_group || null;
-    const isAgent = !isTV && (permissionGroup === 'Agent' || Boolean(profile?.rep_id));
+    const business = profile?.business || "alpha_rentals";
+    const isAgent = !isTV && (isAgentRole || Boolean(profile?.rep_id));
+    const isAdminOrSupervisor = !isTV && (isAdmin || isSupervisor);
 
     const logoutHandler = async () => {
         try {
@@ -44,7 +53,7 @@ const Header: React.FC<HeaderProps> = (props) => {
         localStorage.removeItem('userSession');
         setProfile(null);
         auth.logout();
-        navigate('/Auth', { replace: true });
+        navigate('/', { replace: true });
     };
 
     // Mobile SideDrawer state
@@ -68,7 +77,7 @@ const Header: React.FC<HeaderProps> = (props) => {
 
     const navLinks = (
         <div className={classes.navLinks}>
-            {auth.isLoggedIn && (
+            {auth.isLoggedIn ? (
                 <>
                     {isTV ? (
                         <NavLink
@@ -81,12 +90,22 @@ const Header: React.FC<HeaderProps> = (props) => {
                     ) : (
                         <>
                             <NavLink
-                                to={`/${business}/PlayerBuilder`}
+                                to="/"
                                 className={classes.link}
                                 onClick={handleNavClick}
                             >
-                                Play Ground
+                                Home
                             </NavLink>
+
+                            {isElevatedStaff && (
+                                <NavLink
+                                    to={`/${business}/PlayerBuilder`}
+                                    className={classes.link}
+                                    onClick={handleNavClick}
+                                >
+                                    Play Ground
+                                </NavLink>
+                            )}
 
                             {isAgent && (
                                 <NavLink
@@ -108,7 +127,7 @@ const Header: React.FC<HeaderProps> = (props) => {
                                 </NavLink>
                             )}
 
-                            {permissionGroup !== 'Agent' && (
+                            {isAdminOrSupervisor && (
                                 <NavLink
                                     to={`/${business}/BusinessManager`}
                                     className={classes.link}
@@ -117,8 +136,43 @@ const Header: React.FC<HeaderProps> = (props) => {
                                     Business Manager
                                 </NavLink>
                             )}
+
+                            {isElevatedStaff && (
+                                <NavLink
+                                    to={`/admin/${business}`}
+                                    className={classes.link}
+                                    onClick={handleNavClick}
+                                >
+                                    Supervisor Panel
+                                </NavLink>
+                            )}
+
+                            <NavLink
+                                to="/?reservations=1"
+                                className={classes.link}
+                                onClick={handleNavClick}
+                            >
+                                Reservations
+                            </NavLink>
                         </>
                     )}
+                </>
+            ) : (
+                <>
+                    <NavLink
+                        to="/"
+                        className={classes.link}
+                        onClick={handleNavClick}
+                    >
+                        Home
+                    </NavLink>
+                    <NavLink
+                        to="/?reservations=1"
+                        className={classes.link}
+                        onClick={handleNavClick}
+                    >
+                        Reservations
+                    </NavLink>
                 </>
             )}
         </div>
@@ -176,7 +230,7 @@ const Header: React.FC<HeaderProps> = (props) => {
                                         </NavLink>
                                     ) : (
                                         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                                            {!isTV && !isLinkedDevice && (
+                                            {!isTV && !isLinkedDevice && isElevatedStaff && (
                                                 <div
                                                     onClick={() => {
                                                         setShowLinkedDevicesModal(true);
@@ -246,7 +300,7 @@ const Header: React.FC<HeaderProps> = (props) => {
 
                 {/* Mobile brand logo */}
                 <div className={classes.mobileBrand}>
-                    <NavLink to={`/${business}`} className={classes.mobileBrandLink}>
+                    <NavLink to="/" className={classes.mobileBrandLink}>
                         <img src={appLogo} alt="Triple Great Logo" className={classes.brandLogoMobile} />
                         <span>Triple Great</span>
                     </NavLink>
@@ -257,7 +311,7 @@ const Header: React.FC<HeaderProps> = (props) => {
 
                 {/* Desktop navigation */}
                 <div className={classes.mainNav}>
-                    <NavLink to={`/${business}`} className={classes.brandContainer}>
+                    <NavLink to="/" className={classes.brandContainer}>
                         <img src={appLogo} alt="Triple Great Logo" className={classes.brandLogo} />
                         <h1>Triple Great</h1>
                     </NavLink>
@@ -272,7 +326,7 @@ const Header: React.FC<HeaderProps> = (props) => {
                         </NavLink>
                     ) : (
                         <>
-                            {!isTV && !isLinkedDevice && (
+                            {!isTV && !isLinkedDevice && isElevatedStaff && (
                                 <span
                                     onClick={() => setShowLinkedDevicesModal(true)}
                                     className={classes.link}
@@ -299,7 +353,7 @@ const Header: React.FC<HeaderProps> = (props) => {
                 </div>
             </header>
 
-            {showLinkedDevicesModal && (
+            {showLinkedDevicesModal && isElevatedStaff && (
                 <LinkedDevicesModal onClose={() => setShowLinkedDevicesModal(false)} />
             )}
 
