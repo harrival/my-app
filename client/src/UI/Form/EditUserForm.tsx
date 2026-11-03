@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import classes from '../../GamePlayers/Styles/Form.module.css';
 import axios from 'axios';
 import { BASE_URL } from '../../shared/Utils/apiConfig';
 import { UserType } from '../../GamePlayers/Components/UserInterface';
+import { useUserProfile } from '../../shared/Context/UserProfileContext';
 
 interface EditUserFormProps {
     user: UserType;
@@ -11,7 +12,21 @@ interface EditUserFormProps {
 }
 
 const EditUserForm: React.FC<EditUserFormProps> = ({ user, onClose, onSuccess }) => {
+    const { profile, isAdmin, isBusinessOwner } = useUserProfile();
+
+    const isCreatorAdmin = Boolean(
+        isAdmin ||
+        profile?.is_admin ||
+        profile?.permission_group?.toLowerCase() === 'admin'
+    );
+    const isCreatorBusinessOwner = !isCreatorAdmin && Boolean(
+        isBusinessOwner ||
+        profile?.permission_group?.toLowerCase() === 'business_owner' ||
+        profile?.permission_group?.toLowerCase() === 'supervisor'
+    );
+
     const [formData, setFormData] = useState<UserType>(user);
+    const [roles, setRoles] = useState<{ id: number; role: string; description?: string }[]>([]);
     const [errors, setErrors] = useState({
         first_name: '',
         last_name: '',
@@ -23,6 +38,52 @@ const EditUserForm: React.FC<EditUserFormProps> = ({ user, onClose, onSuccess })
         setFormData(user); // Update form data if the user prop changes
     }, [user]);
 
+    useEffect(() => {
+        const fetchRoles = async () => {
+            try {
+                const response = await axios.get(`${BASE_URL}/api/roles`);
+                const rolesData = Array.isArray(response.data) ? response.data : (response.data?.roles || []);
+                if (rolesData.length > 0) {
+                    setRoles(rolesData);
+                } else {
+                    const fallback = await axios.get(`${BASE_URL}/getAll`, {
+                        params: { tableName: 'roles_table' }
+                    });
+                    if (Array.isArray(fallback.data) && fallback.data.length > 0) {
+                        setRoles(fallback.data);
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching roles:', error);
+            }
+        };
+        fetchRoles();
+    }, []);
+
+    const availableRoles = useMemo(() => {
+        const sourceRoles = roles.length > 0
+            ? roles
+            : [
+                { id: 1, role: 'Admin', description: 'System Administrator' },
+                { id: 2, role: 'Business_Owner', description: 'Business Owner' },
+                { id: 3, role: 'Agent', description: 'Agent' },
+            ];
+
+        if (isCreatorBusinessOwner) {
+            // Business Owner can ONLY assign Business Owner or Agent; MUST NOT see Admin
+            return sourceRoles.filter(r => {
+                const norm = r.role.toLowerCase();
+                return norm === 'business_owner' || norm === 'agent' || norm === 'supervisor';
+            });
+        }
+
+        if (isCreatorAdmin) {
+            return sourceRoles.filter(r => r.role.toLowerCase() !== 'customer');
+        }
+
+        return sourceRoles.filter(r => r.role.toLowerCase() !== 'admin' && r.role.toLowerCase() !== 'customer');
+    }, [roles, isCreatorAdmin, isCreatorBusinessOwner]);
+
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
@@ -33,22 +94,25 @@ const EditUserForm: React.FC<EditUserFormProps> = ({ user, onClose, onSuccess })
         e.preventDefault();
 
         const newErrors = {
-            first_name: !formData.first_name ? 'First name is required' : '',
-            last_name: !formData.last_name ? 'Last name is required' : '',
-            email: !formData.email ? 'Email is required' : !/\S+@\S+\.\S+/.test(formData.email) ? 'Invalid email format' : '',
-            phone_number: formData.phone_number && !/^\d{10}$/.test(formData.phone_number) ? 'Phone must be 10 digits' : '',
+            first_name: !formData.first_name?.trim() ? 'First name is required' : '',
+            last_name: !formData.last_name?.trim() ? 'Last name is required' : '',
+            email: !formData.email?.trim() ? 'Email is required' : !/\S+@\S+\.\S+/.test(formData.email.trim()) ? 'Invalid email format' : '',
+            phone_number: formData.phone_number && !/^\d{10}$/.test(formData.phone_number.replace(/\D/g, '')) ? 'Phone must be 10 digits' : '',
         };
 
         setErrors(newErrors);
         if (Object.values(newErrors).some(err => err !== '')) return;
 
         try {
-            // Example API call to update user
-            const response = await axios.patch(`${BASE_URL}/editPlayerForm/${formData.user_guid}`, {
+            await axios.patch(`${BASE_URL}/editPlayerForm/${formData.user_guid}`, {
                 tableName: 'users_table',
                 idColumn: 'user_guid',
                 ...formData,
-                is_admin: formData.permission_group === 'admin', // Derive from permission_group
+                first_name: formData.first_name.trim(),
+                last_name: formData.last_name.trim(),
+                email: formData.email.trim(),
+                phone_number: formData.phone_number ? formData.phone_number.replace(/\D/g, '') : '',
+                is_admin: formData.permission_group?.toLowerCase() === 'admin', // Derive from permission_group
             });
             onSuccess(); // Notify parent to refresh data
             onClose();
@@ -69,6 +133,7 @@ const EditUserForm: React.FC<EditUserFormProps> = ({ user, onClose, onSuccess })
                             type="text"
                             id="first_name"
                             name="first_name"
+                            placeholder="First Name"
                             className={classes.formInput}
                             value={formData.first_name}
                             onChange={handleChange}
@@ -82,6 +147,7 @@ const EditUserForm: React.FC<EditUserFormProps> = ({ user, onClose, onSuccess })
                             type="text"
                             id="last_name"
                             name="last_name"
+                            placeholder="Last Name"
                             className={classes.formInput}
                             value={formData.last_name}
                             onChange={handleChange}
@@ -95,6 +161,7 @@ const EditUserForm: React.FC<EditUserFormProps> = ({ user, onClose, onSuccess })
                             type="email"
                             id="email"
                             name="email"
+                            placeholder="name@example.com"
                             className={classes.formInput}
                             value={formData.email}
                             onChange={handleChange}
@@ -108,6 +175,7 @@ const EditUserForm: React.FC<EditUserFormProps> = ({ user, onClose, onSuccess })
                             type="tel"
                             id="phone_number"
                             name="phone_number"
+                            placeholder="(555) 000-0000"
                             className={classes.formInput}
                             value={formData.phone_number}
                             onChange={handleChange}
@@ -120,6 +188,7 @@ const EditUserForm: React.FC<EditUserFormProps> = ({ user, onClose, onSuccess })
                             type="text"
                             id="address"
                             name="address"
+                            placeholder="Street address"
                             className={classes.formInput}
                             value={formData.address}
                             onChange={handleChange}
@@ -134,8 +203,17 @@ const EditUserForm: React.FC<EditUserFormProps> = ({ user, onClose, onSuccess })
                             value={formData.permission_group}
                             onChange={handleChange}
                         >
-                            <option value="user">User</option>
-                            <option value="admin">Admin</option>
+                            {availableRoles.length > 0 ? (
+                                availableRoles.map(r => (
+                                    <option key={r.role} value={r.role}>
+                                        {r.role.replace(/_/g, ' ')}
+                                    </option>
+                                ))
+                            ) : (
+                                <option value={formData.permission_group}>
+                                    {formData.permission_group ? formData.permission_group.replace(/_/g, ' ') : 'Select Role'}
+                                </option>
+                            )}
                         </select>
                     </div>
                     <div className={classes.buttonContainer}>

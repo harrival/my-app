@@ -27,7 +27,7 @@ interface Representative {
 
 const AddRepForm = ({ setShowAddRep }: AddRepProps) => {
     const { profile } = useUserProfile();
-    const isSupervisor = profile?.permission_group?.toLowerCase() === 'supervisor';
+    const isBusinessOwner = profile?.permission_group?.toLowerCase() === 'business_owner' || profile?.permission_group?.toLowerCase() === 'supervisor';
 
     const [reps, setReps] = useState<NewRep[]>([]);
     const [firstNameOptions, setFirstNameOptions] = useState<string[]>([]);
@@ -44,11 +44,11 @@ const AddRepForm = ({ setShowAddRep }: AddRepProps) => {
     });
 
     useEffect(() => {
-        if (isSupervisor) {
+        if (isBusinessOwner) {
             const userBusiness = profile?.business || profile?.business_value || '';
             setRep(prev => ({ ...prev, Business: userBusiness }));
         }
-    }, [isSupervisor, profile]);
+    }, [isBusinessOwner, profile]);
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         const { name, value } = e.target;
@@ -205,7 +205,7 @@ const AddRepForm = ({ setShowAddRep }: AddRepProps) => {
                 }
             }
 
-            const response = await axios.post(`${BASE_URL}/addToTable`, {
+            await axios.post(`${BASE_URL}/addToTable`, {
                 tableName: 'reps_table',
                 fields: {
                     rep_guid: crypto.randomUUID(), // Generate a new GUID
@@ -214,6 +214,17 @@ const AddRepForm = ({ setShowAddRep }: AddRepProps) => {
                     is_active: rep.IsActive || false,
                     business: rep.Business,
                 }
+            });
+
+            // Clear the form on success
+            setRep({});
+            setErrors({
+                FirstName: '',
+                LastName: '',
+                EventType: '',
+                CustomerGUID: '',
+                EventFirstDate: '',
+                EventLastDate: ''
             });
             setShowAddRep(false); // Close the form
         } catch (error) {

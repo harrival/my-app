@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import { fetchBusinessInfo } from '../../shared/Utils/businessInfo';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import classes from '../Styles/Admin.module.css';
 import Reps from './Reps';
@@ -16,14 +15,6 @@ const Admin: React.FC = () => {
     const { profile } = useUserProfile();
     const navigate = useNavigate();
     const business = profile?.business || 'non_business';
-    const [businessName, setBusinessName] = useState<string>('');
-
-    useEffect(() => {
-        if (!profile?.business) return;
-        fetchBusinessInfo(profile.business, profile.user_guid)
-            .then(info => setBusinessName(info?.business_name || ''))
-            .catch(() => {});
-    }, [profile?.business, profile?.user_guid, activeTable]);
 
     if (activeTable === 'reps') {
         return <Reps onBack={() => setActiveTable(null)} />;
@@ -65,7 +56,7 @@ const Admin: React.FC = () => {
 
     return (
         <div className={classes.adminPanel}>
-            <h1>Admin Panel ({businessName || business})</h1>
+            <h1>Admin Panel</h1>
             <div className={classes.buttonGrid}>
                 <button
                     className={classes.adminButton}
@@ -117,7 +108,7 @@ const Admin: React.FC = () => {
                     type="button"
                     onClick={() => navigate(`/admin/${encodeURIComponent(business)}`)}
                 >
-                    Supervisor Control Panel
+                    Business Owner Control Panel
                 </button>
                 <button
                     className={classes.adminButton}

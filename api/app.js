@@ -64,7 +64,7 @@ io.on('connection', (socket) => {
 });
 
 const allowedOrigins = [
-  'https://my-app-frontend-production-34ef.up.railway.app',
+  'www.triplegreatgame.com',
 ];
 
 if (process.env.CLIENT_URL) {
@@ -86,6 +86,10 @@ app.use(cors({
   credentials: true
 }));
 app.use(middleware.logger);
+
+const path = require("path");
+app.use(express.static(path.join(__dirname, "../client/public")));
+app.use(express.static(path.join(__dirname, "../client/build")));
 
 // Add routes from appServer.js
 app.get('/favicon.ico', (req, res) => res.sendStatus(204));
@@ -186,10 +190,59 @@ const migrateDb = async () => {
   try {
     await db.query(`
       ALTER TABLE users_table ADD COLUMN IF NOT EXISTS business VARCHAR(100);
+      ALTER TABLE users_table ADD COLUMN IF NOT EXISTS password_hash TEXT;
+      ALTER TABLE users_table ADD COLUMN IF NOT EXISTS last_password_hash TEXT;
       ALTER TABLE events_table ADD COLUMN IF NOT EXISTS business VARCHAR(100);
       ALTER TABLE puzzles_type ADD COLUMN IF NOT EXISTS business VARCHAR(100);
       ALTER TABLE reps_table ADD COLUMN IF NOT EXISTS business VARCHAR(100);
       ALTER TABLE game_players_table ADD COLUMN IF NOT EXISTS business VARCHAR(100);
+
+      CREATE TABLE IF NOT EXISTS roles_table (
+          id SERIAL PRIMARY KEY,
+          role VARCHAR(50) UNIQUE NOT NULL,
+          description VARCHAR(255),
+          is_elevated BOOLEAN DEFAULT false,
+          time_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+
+      INSERT INTO roles_table (role, description, is_elevated) VALUES
+          ('Admin', 'System Administrator with full access', true),
+          ('Business_Owner', 'Business Owner with location management access', true),
+          ('Agent', 'Operational staff and customer check-in agent', true),
+          ('Customer', 'Public customer account', false)
+      ON CONFLICT (role) DO UPDATE SET
+          description = EXCLUDED.description,
+          is_elevated = EXCLUDED.is_elevated;
+
+      -- Migrate and normalize any existing permission_group values to match roles_table
+      UPDATE users_table SET permission_group = 'Business_Owner' WHERE LOWER(permission_group) = 'supervisor';
+      UPDATE users_table SET permission_group = 'Admin' WHERE LOWER(permission_group) = 'admin';
+      UPDATE users_table SET permission_group = 'Agent' WHERE LOWER(permission_group) IN ('agent', 'rep');
+      UPDATE users_table SET permission_group = 'Customer' WHERE permission_group IS NULL OR LOWER(permission_group) IN ('customer', 'user') OR permission_group NOT IN ('Admin', 'Business_Owner', 'Agent', 'Customer');
+
+      ALTER TABLE users_table ADD COLUMN IF NOT EXISTS role_id INTEGER;
+
+      -- Sync users_table.role_id with roles_table.id
+      UPDATE users_table SET role_id = roles_table.id
+      FROM roles_table
+      WHERE LOWER(users_table.permission_group) = LOWER(roles_table.role)
+        AND (users_table.role_id IS NULL OR users_table.role_id <> roles_table.id);
+
+      DO $$
+      BEGIN
+          IF NOT EXISTS (
+              SELECT 1 FROM pg_constraint WHERE conname = 'fk_users_roles_table'
+          ) THEN
+              ALTER TABLE users_table ADD CONSTRAINT fk_users_roles_table
+                  FOREIGN KEY (role_id) REFERENCES roles_table(id) ON DELETE SET NULL;
+          END IF;
+          IF NOT EXISTS (
+              SELECT 1 FROM pg_constraint WHERE conname = 'fk_users_permission_group'
+          ) THEN
+              ALTER TABLE users_table ADD CONSTRAINT fk_users_permission_group
+                  FOREIGN KEY (permission_group) REFERENCES roles_table(role) ON UPDATE CASCADE;
+          END IF;
+      END $$;
 
       CREATE TABLE IF NOT EXISTS business_table (
           id SERIAL,
@@ -255,7 +308,10 @@ const migrateDb = async () => {
           time_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
       ALTER TABLE customers ADD COLUMN IF NOT EXISTS password_hash TEXT;
+      ALTER TABLE customers ADD COLUMN IF NOT EXISTS last_password_hash TEXT;
       ALTER TABLE customers ALTER COLUMN business DROP NOT NULL;
+      ALTER TABLE customers ALTER COLUMN email DROP NOT NULL;
+      ALTER TABLE customers ALTER COLUMN phone_number DROP NOT NULL;
       CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email);
 
       CREATE TABLE IF NOT EXISTS business_settings (
@@ -387,16 +443,20 @@ const migrateDb = async () => {
       CREATE TABLE IF NOT EXISTS supervisor_audit_logs (
           id SERIAL,
           log_guid VARCHAR(50) PRIMARY KEY,
-          business VARCHAR(100) NOT NULL,
-          actor_guid VARCHAR(50) NOT NULL,
+          business VARCHAR(100),
+          actor_guid VARCHAR(150) NOT NULL,
           action VARCHAR(50) NOT NULL,
-          entity_type VARCHAR(50) NOT NULL,
-          entity_guid VARCHAR(50) NOT NULL,
+          entity_type VARCHAR(100) NOT NULL,
+          entity_guid VARCHAR(150) NOT NULL,
           reason TEXT,
           before_state JSONB,
           after_state JSONB,
           time_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
+      ALTER TABLE supervisor_audit_logs ALTER COLUMN actor_guid TYPE VARCHAR(150);
+      ALTER TABLE supervisor_audit_logs ALTER COLUMN entity_guid TYPE VARCHAR(150);
+      ALTER TABLE supervisor_audit_logs ALTER COLUMN entity_type TYPE VARCHAR(100);
+      ALTER TABLE supervisor_audit_logs ALTER COLUMN business DROP NOT NULL;
       CREATE INDEX IF NOT EXISTS idx_audit_business ON supervisor_audit_logs(business);
 
       CREATE TABLE IF NOT EXISTS notification_outbox (
@@ -440,10 +500,24 @@ const migrateDb = async () => {
     console.error("❌ DB Migrations failed:", err);
   }
 };
-migrateDb();
+
+const { seed } = require("./seedTestData");
+
+migrateDb()
+  .then(() => seed())
+  .then(() => {
+    console.log("🌱 Database seeded and ready.");
+  })
+  .catch((err) => {
+    console.error("❌ Startup migration/seed error:", err.message);
+  });
 
 // IMPORTANT: Use server.listen, not app.listen
 const PORT = process.env.PORT || 5001;
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Backend server running on port ${PORT}`);
-});
+if (require.main === module) {
+  server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Backend server running on port ${PORT}`);
+  });
+}
+
+module.exports = { app, server };

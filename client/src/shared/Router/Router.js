@@ -72,6 +72,7 @@ const Router = () => {
                     <Route path="/:business/Home" element={<Home />} />
                     <Route path="/book/:business" element={<CustomerBookingPortal />} />
                     <Route path="/book/:business/manage" element={<ManageReservation />} />
+                    <Route path="/admin" element={<SupervisorControlPanel />} />
                     <Route path="/admin/:business" element={<SupervisorControlPanel />} />
                     <Route path="/dev/outbox" element={<DevSandboxInspector />} />
                     <Route path="/dev/clock" element={<DevSandboxInspector />} />
@@ -91,6 +92,7 @@ const Router = () => {
                     {/* Multi-Tenant Public Booking Portal & Supervisor Control Panel Ingress */}
                     <Route path="/book/:business" element={<CustomerBookingPortal />} />
                     <Route path="/book/:business/manage" element={<ManageReservation />} />
+                    <Route path="/admin" element={<SupervisorControlPanel />} />
                     <Route path="/admin/:business" element={<SupervisorControlPanel />} />
                     <Route path="/dev/outbox" element={<DevSandboxInspector />} />
                     <Route path="/dev/clock" element={<DevSandboxInspector />} />

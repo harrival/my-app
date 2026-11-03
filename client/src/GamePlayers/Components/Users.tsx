@@ -93,6 +93,7 @@ const Users: React.FC<UsersProps> = ({ onBack }) => {
                         <th className={classes.tableTh}>Last Name</th>
                         <th className={classes.tableTh}>Email</th>
                         <th className={classes.tableTh}>Phone Number</th>
+                        <th className={classes.tableTh}>Role</th>
                         <th className={classes.tableTh}>Action</th>
                     </tr>
                 </thead>
@@ -103,6 +104,9 @@ const Users: React.FC<UsersProps> = ({ onBack }) => {
                             <td className={classes.tableTd}>{user.last_name}</td>
                             <td className={classes.tableTd}>{user.email}</td>
                             <td className={classes.tableTd}>{user.phone_number}</td>
+                            <td className={classes.tableTd}>
+                                {user.permission_group ? user.permission_group.replace(/_/g, ' ') : '—'}
+                            </td>
                             <td className={`${classes.tableTd} ${classes.tableTdCenter}`}>
                                 <button className={`${classes.actionButton} ${classes.editButton}`} onClick={() => handleEditUser(user)}>
                                     Edit

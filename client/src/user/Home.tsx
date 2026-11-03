@@ -4,17 +4,9 @@ import axios from 'axios';
 import { AuthContext } from '../shared/Context/auth-context';
 import { useUserProfile } from '../shared/Context/UserProfileContext';
 import { getResolvedBaseUrl } from '../shared/Utils/apiConfig';
-
-const MAX_OTP_ATTEMPTS = 3;
-
-interface LookupResponse {
-  found: boolean;
-  source: 'users_table' | 'customers' | null;
-  auth_method: 'OTP_6_DIGIT' | 'PASSWORD' | null;
-  has_password?: boolean;
-  account?: any;
-  message?: string;
-}
+import PasswordStrengthChecklist from '../shared/Authenticate/PasswordStrengthChecklist';
+import PasswordInput from '../shared/Authenticate/PasswordInput';
+import { evaluatePasswordStrength } from '../shared/Utils/passwordValidation';
 
 export interface BusinessLocationEntry {
   business: string;
@@ -151,22 +143,46 @@ const Home: React.FC = () => {
   const [selectedCountry, setSelectedCountry] = useState<string>('');
   const [selectedState, setSelectedState] = useState<string>('');
   const [selectedCity, setSelectedCity] = useState<string>('');
+  const [locationErrors, setLocationErrors] = useState<{
+    country?: string;
+    state?: string;
+    city?: string;
+  }>({});
 
   // Account tabs: 'signin' | 'signup'
   const [activeTab, setActiveTab] = useState<'signin' | 'signup'>('signin');
 
   // Sign-In state
   const [identifier, setIdentifier] = useState<string>('');
-  const [signInStep, setSignInStep] = useState<'lookup' | 'staff_otp' | 'customer_password'>('lookup');
+  const [signInPassword, setSignInPassword] = useState<string>('');
+  const [signInStep, setSignInStep] = useState<
+    'lookup' | 'verify_2fa' | 'staff_first_time' | 'staff_password' | 'staff_2fa' | 'customer_password' | 'forgot_password'
+  >('lookup');
   const [matchedAccount, setMatchedAccount] = useState<any>(null);
+  const [twoFaData, setTwoFaData] = useState<any>(null);
+  const [verificationOtp, setVerificationOtp] = useState<string>('');
   const [customerHasPassword, setCustomerHasPassword] = useState<boolean>(true);
+  const [maskedPhone, setMaskedPhone] = useState<string>('');
 
-  // Verification code state
-  const [generatedOtp, setGeneratedOtp] = useState<string>('');
-  const [otpInput, setOtpInput] = useState<string>('');
-  const [otpAttempts, setOtpAttempts] = useState<number>(0);
+  // First-time staff setup state
+  const [staffNewPassword, setStaffNewPassword] = useState<string>('');
+  const [staffConfirmPassword, setStaffConfirmPassword] = useState<string>('');
+  const [staffSetupOtp, setStaffSetupOtp] = useState<string>('');
 
-  // Password state
+  // Returning staff state
+  const [staffPassword, setStaffPassword] = useState<string>('');
+  const [staff2faOtp, setStaff2faOtp] = useState<string>('');
+
+  // Forgot password / reset state
+  const [resetIdentifier, setResetIdentifier] = useState<string>('');
+  const [resetOtp, setResetOtp] = useState<string>('');
+  const [resetStep, setResetStep] = useState<'enter_code' | 'set_password'>('enter_code');
+  const [resetToken, setResetToken] = useState<string>('');
+  const [resetNewPassword, setResetNewPassword] = useState<string>('');
+  const [resetConfirmPassword, setResetConfirmPassword] = useState<string>('');
+  const [devPin, setDevPin] = useState<string>('');
+
+  // Customer Password state
   const [customerPassword, setCustomerPassword] = useState<string>('');
 
   // Sign-Up state (personal customer info only — not tied to a business)
@@ -187,8 +203,21 @@ const Home: React.FC = () => {
     const params = new URLSearchParams(location.search);
     if (params.get('reservations') === '1' || location.hash === '#reservations') {
       setShowReservationFinder(true);
+      setTimeout(() => {
+        const section = document.getElementById('reservations');
+        if (section) {
+          section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+        if (!selectedCountry) {
+          document.getElementById('filter-country')?.focus();
+        } else if (!selectedState) {
+          document.getElementById('filter-state')?.focus();
+        } else if (!selectedCity) {
+          document.getElementById('filter-city')?.focus();
+        }
+      }, 150);
     }
-  }, [location.search, location.hash]);
+  }, [location.search, location.hash, selectedCountry, selectedState, selectedCity]);
 
   // Load business directory from server
   useEffect(() => {
@@ -251,113 +280,493 @@ const Home: React.FC = () => {
     setSelectedCountry(country);
     setSelectedState('');
     setSelectedCity('');
+    if (locationErrors.country) {
+      setLocationErrors((prev) => ({ ...prev, country: '' }));
+    }
+    if (country) {
+      setTimeout(() => {
+        document.getElementById('filter-state')?.focus();
+      }, 100);
+    }
   };
 
   const handleStateChange = (stateVal: string) => {
     setSelectedState(stateVal);
     setSelectedCity('');
+    if (locationErrors.state) {
+      setLocationErrors((prev) => ({ ...prev, state: '' }));
+    }
+    if (stateVal) {
+      setTimeout(() => {
+        document.getElementById('filter-city')?.focus();
+      }, 100);
+    }
+  };
+
+  const handleCityChange = (cityVal: string) => {
+    setSelectedCity(cityVal);
+    if (locationErrors.city) {
+      setLocationErrors((prev) => ({ ...prev, city: '' }));
+    }
+  };
+
+  const handleMakeReservationClick = (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    setShowReservationFinder(true);
+    setLocationErrors({});
+
+    // Smoothly scroll and direct user directly to the filter section
+    setTimeout(() => {
+      const section = document.getElementById('reservations');
+      if (section) {
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      // Focus the first empty filter field
+      if (!selectedCountry) {
+        document.getElementById('filter-country')?.focus();
+      } else if (!selectedState) {
+        document.getElementById('filter-state')?.focus();
+      } else if (!selectedCity) {
+        document.getElementById('filter-city')?.focus();
+      }
+    }, 100);
   };
 
   const resetSignInFlow = () => {
     setSignInStep('lookup');
     setMatchedAccount(null);
-    setGeneratedOtp('');
-    setOtpInput('');
-    setOtpAttempts(0);
+    setTwoFaData(null);
+    setVerificationOtp('');
+    setSignInPassword('');
+    setMaskedPhone('');
+    setStaffNewPassword('');
+    setStaffConfirmPassword('');
+    setStaffSetupOtp('');
+    setStaffPassword('');
+    setStaff2faOtp('');
+    setResetIdentifier('');
+    setResetOtp('');
+    setResetStep('enter_code');
+    setResetToken('');
+    setResetNewPassword('');
+    setResetConfirmPassword('');
     setCustomerPassword('');
+    setDevPin('');
     setError('');
     setInfoMessage('');
   };
 
-  const handleLookupSubmit = async (e: React.FormEvent) => {
+  const handleSignInSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setInfoMessage('');
 
     const trimmed = identifier.trim();
     if (!trimmed) {
-      setError('Please enter your phone number or email address.');
+      setError('Please enter your phone number or email.');
+      return;
+    }
+
+    if (!signInPassword) {
+      setError('Please enter your password.');
       return;
     }
 
     setLoading(true);
     try {
       const currentApiUrl = getResolvedBaseUrl();
-      const res = await axios.post<LookupResponse>(`${currentApiUrl}/auth/lookup`, {
-        identifier: trimmed
+      const res = await axios.post(`${currentApiUrl}/auth/login`, {
+        identifier: trimmed,
+        password: signInPassword
       });
 
       const data = res.data;
 
-      if (data.found && data.source === 'users_table') {
-        setMatchedAccount(data.account);
-
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        setGeneratedOtp(otp);
-        console.log('--- VERIFICATION CODE ---');
-        console.log(`Code: ${otp}`);
-        console.log('-------------------------');
-
-        setOtpAttempts(0);
-        setOtpInput('');
-        setSignInStep('staff_otp');
-        setInfoMessage('Please enter your 6-digit verification code to continue.');
-      } else if (data.found && data.source === 'customers') {
-        setMatchedAccount(data.account);
-        setCustomerHasPassword(Boolean(data.has_password));
-        setCustomerPassword('');
-        setSignInStep('customer_password');
+      if (data?.require_2fa || data?.requires_2fa) {
+        setTwoFaData({
+          identifier: trimmed,
+          user_guid: data.user_guid,
+          customer_guid: data.customer_guid,
+          source: data.source,
+          masked_phone: data.masked_phone
+        });
+        setMaskedPhone(data.masked_phone || '');
+        if (data.dev_pin) {
+          console.log('====================================================');
+          console.log(`📱 [DEV OTP CONSOLE] 🔐 6-DIGIT VERIFICATION PIN:`, data.dev_pin);
+          console.log(`   Account:`, trimmed);
+          console.log('====================================================');
+          setDevPin(data.dev_pin);
+        }
+        setSignInStep('verify_2fa');
+        setVerificationOtp('');
         setInfoMessage(
-          data.has_password
-            ? 'Please enter your password to sign in.'
-            : 'Please create a password below to complete your sign in.'
+          data.message ||
+            `Credentials verified! Enter the 6-digit verification code sent to ${data.masked_phone ? data.masked_phone : 'your phone/email'}.`
         );
-      } else {
-        setError('No account was found with those details. Please create an account to continue.');
-        if (trimmed.includes('@')) {
-          setSignUpEmail(trimmed);
+      } else if (data?.profile) {
+        await refreshProfile(data.profile.user_guid);
+        auth.login();
+        if (data.profile.permission_group && data.profile.permission_group.toLowerCase() !== 'customer') {
+          navigate(`/${data.profile.business || 'alpha_rentals'}`, { replace: true });
         } else {
-          setSignUpPhone(trimmed);
+          navigate('/', { replace: true });
         }
       }
     } catch (err: any) {
-      setError(err?.response?.data?.error || 'Unable to verify your account right now. Please try again.');
+      if (err?.response?.data?.is_first_time) {
+        setSignInStep('staff_first_time');
+        if (err.response.data.dev_pin) {
+          setDevPin(err.response.data.dev_pin);
+        }
+        if (err.response.data.masked_phone) {
+          setMaskedPhone(err.response.data.masked_phone);
+        }
+        setInfoMessage(err.response.data.error || 'Welcome! Please set up your password.');
+      } else {
+        setError(err?.response?.data?.error || 'Invalid email/phone or password. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleStaffOtpSubmit = async (e: React.FormEvent) => {
+  const handleVerify2faSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setInfoMessage('');
 
-    if (otpAttempts >= MAX_OTP_ATTEMPTS) {
-      setError('Too many failed attempts. Please go back and request a new code.');
-      return;
-    }
-
-    if (otpInput.trim() !== generatedOtp) {
-      const nextAttempts = otpAttempts + 1;
-      setOtpAttempts(nextAttempts);
-      const remaining = MAX_OTP_ATTEMPTS - nextAttempts;
-      if (remaining > 0) {
-        setError(`Incorrect verification code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`);
-      } else {
-        setError('Too many failed attempts. Please go back and request a new code.');
-      }
+    const trimmedOtp = verificationOtp.trim();
+    if (!trimmedOtp || trimmedOtp.length !== 6) {
+      setError('Please enter the 6-digit verification code.');
       return;
     }
 
     setLoading(true);
     try {
       const currentApiUrl = getResolvedBaseUrl();
-      await axios.post(`${currentApiUrl}/profile/${matchedAccount.user_guid}`, matchedAccount);
-      await refreshProfile(matchedAccount.user_guid);
-      auth.login();
-      const targetBiz = matchedAccount.business || 'alpha_rentals';
-      navigate(`/${targetBiz}`, { replace: true });
-    } catch {
-      setError('Unable to sign in right now. Please try again.');
+      const res = await axios.post(`${currentApiUrl}/auth/verify-2fa`, {
+        identifier: twoFaData?.identifier || identifier.trim(),
+        otp: trimmedOtp,
+        user_guid: twoFaData?.user_guid,
+        customer_guid: twoFaData?.customer_guid,
+        source: twoFaData?.source
+      });
+
+      const profileData = res.data?.profile;
+      if (profileData?.user_guid) {
+        await refreshProfile(profileData.user_guid);
+        auth.login();
+        if (profileData.permission_group && profileData.permission_group.toLowerCase() !== 'customer') {
+          navigate(`/${profileData.business || 'alpha_rentals'}`, { replace: true });
+        } else {
+          navigate('/', { replace: true });
+        }
+      } else {
+        setError('Verification failed. Please try again.');
+      }
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Invalid or expired verification code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStaffFirstTimeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setInfoMessage('');
+
+    if (!staffNewPassword) {
+      setError('Please create a password.');
+      return;
+    }
+
+    const strength = evaluatePasswordStrength(staffNewPassword);
+    if (!strength.isValid) {
+      setError(`Password requirement: ${strength.errors[0]}`);
+      return;
+    }
+
+    if (staffNewPassword !== staffConfirmPassword) {
+      setError('Passwords do not match. Please verify both passwords.');
+      return;
+    }
+
+    if (!staffSetupOtp || staffSetupOtp.trim().length !== 6) {
+      setError('Please enter the 6-digit verification code sent to your phone.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const currentApiUrl = getResolvedBaseUrl();
+      const res = await axios.post(`${currentApiUrl}/auth/staff/setup-password`, {
+        identifier: identifier.trim(),
+        user_guid: matchedAccount?.user_guid,
+        password: staffNewPassword,
+        otp: staffSetupOtp.trim()
+      });
+
+      const profileData = res.data?.profile || matchedAccount;
+      if (profileData?.user_guid) {
+        await refreshProfile(profileData.user_guid);
+        auth.login();
+        const targetBiz = profileData.business || 'alpha_rentals';
+        navigate(`/${targetBiz}`, { replace: true });
+      } else {
+        setError('Could not complete setup. Please try again.');
+      }
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Unable to set password. Please check your verification code.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStaffPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setInfoMessage('');
+
+    if (!staffPassword) {
+      setError('Please enter your password.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const currentApiUrl = getResolvedBaseUrl();
+      const res = await axios.post(`${currentApiUrl}/auth/staff/login`, {
+        identifier: identifier.trim(),
+        password: staffPassword
+      });
+
+      if (res.data?.require_2fa || res.data?.requires_2fa) {
+        setSignInStep('staff_2fa');
+        setStaff2faOtp('');
+        setMaskedPhone(res.data.masked_phone || maskedPhone);
+        if (res.data.dev_pin) {
+          console.log('====================================================');
+          console.log(`📱 [DEV OTP CONSOLE] 🔐 6-DIGIT STAFF 2FA PIN:`, res.data.dev_pin);
+          console.log(`   Account:`, identifier);
+          console.log('====================================================');
+          setDevPin(res.data.dev_pin);
+        }
+        setInfoMessage(res.data.message || 'Password verified! Enter the 6-digit verification code sent to your phone.');
+      } else if (res.data?.profile) {
+        await refreshProfile(res.data.profile.user_guid);
+        auth.login();
+        navigate(`/${res.data.profile.business || 'alpha_rentals'}`, { replace: true });
+      }
+    } catch (err: any) {
+      if (err?.response?.data?.is_first_time) {
+        setSignInStep('staff_first_time');
+        setInfoMessage(err.response.data.error);
+      } else {
+        setError(err?.response?.data?.error || 'Invalid password. Please try again or reset your password.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStaff2faSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setInfoMessage('');
+
+    if (!staff2faOtp || staff2faOtp.trim().length !== 6) {
+      setError('Please enter the 6-digit verification code.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const currentApiUrl = getResolvedBaseUrl();
+      const res = await axios.post(`${currentApiUrl}/auth/staff/verify-2fa`, {
+        identifier: identifier.trim(),
+        user_guid: matchedAccount?.user_guid,
+        otp: staff2faOtp.trim()
+      });
+
+      const profileData = res.data?.profile || matchedAccount;
+      if (profileData?.user_guid) {
+        await refreshProfile(profileData.user_guid);
+        auth.login();
+        const targetBiz = profileData.business || 'alpha_rentals';
+        navigate(`/${targetBiz}`, { replace: true });
+      } else {
+        setError('Verification failed. Please try again.');
+      }
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Invalid or expired verification code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPasswordRequest = async (targetIdent?: string) => {
+    const ident = (targetIdent || resetIdentifier || identifier).trim();
+    if (!ident) {
+      setError('Please enter your email address or phone number to reset your password.');
+      return;
+    }
+
+    setResetIdentifier(ident);
+    setError('');
+    setInfoMessage('');
+    setLoading(true);
+    try {
+      const currentApiUrl = getResolvedBaseUrl();
+      const res = await axios.post(`${currentApiUrl}/auth/forgot-password`, {
+        identifier: ident
+      });
+
+      setMaskedPhone(res.data?.masked_phone || '');
+      setSignInStep('forgot_password');
+      setResetStep('enter_code');
+      setResetToken('');
+      setResetOtp('');
+      setResetNewPassword('');
+      setResetConfirmPassword('');
+      if (res.data?.dev_pin) {
+        console.log('====================================================');
+        console.log(`📱 [DEV OTP CONSOLE] 🔐 6-DIGIT PASSWORD RESET PIN:`, res.data.dev_pin);
+        console.log(`   Account:`, ident);
+        console.log('====================================================');
+        setDevPin(res.data.dev_pin);
+      }
+      setInfoMessage(
+        res.data?.message ||
+          'A 6-digit verification code has been dispatched. Enter the code below to verify your identity.'
+      );
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Unable to request password reset. Please check your details and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyResetCode = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setError('');
+    setInfoMessage('');
+
+    const code = resetOtp.trim();
+    if (!code || code.length !== 6) {
+      setError('Please enter the 6-digit verification code.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const currentApiUrl = getResolvedBaseUrl();
+      const res = await axios.post(`${currentApiUrl}/auth/verify-reset-code`, {
+        identifier: resetIdentifier.trim(),
+        otp: code
+      });
+
+      if (res.data?.reset_token) {
+        setResetToken(res.data.reset_token);
+      }
+      setResetStep('set_password');
+      setInfoMessage('Identity verified successfully! Please enter and confirm your new password below.');
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Invalid or expired verification code. Please check the code and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResetPasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setInfoMessage('');
+
+    if (!resetNewPassword) {
+      setError('Please enter a new password.');
+      return;
+    }
+
+    const strength = evaluatePasswordStrength(resetNewPassword);
+    if (!strength.isValid) {
+      setError(`Password requirement: ${strength.errors[0]}`);
+      return;
+    }
+
+    if (resetNewPassword !== resetConfirmPassword) {
+      setError('Passwords do not match. Please verify both passwords.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const currentApiUrl = getResolvedBaseUrl();
+      const res = await axios.post(`${currentApiUrl}/auth/reset-password`, {
+        identifier: resetIdentifier.trim(),
+        otp: resetOtp.trim(),
+        reset_token: resetToken,
+        new_password: resetNewPassword
+      });
+
+      const loggedInProfile = res.data?.profile;
+      if (loggedInProfile?.user_guid) {
+        await refreshProfile(loggedInProfile.user_guid);
+        auth.login();
+        resetSignInFlow();
+        if (loggedInProfile.permission_group && loggedInProfile.permission_group.toLowerCase() !== 'customer') {
+          navigate(`/${loggedInProfile.business || 'alpha_rentals'}`, { replace: true });
+        } else {
+          setShowReservationFinder(true);
+          navigate('/', { replace: true });
+        }
+      } else {
+        setInfoMessage(
+          res.data?.message || 'Password reset successfully! Please sign in with your new password.'
+        );
+        resetSignInFlow();
+      }
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Unable to reset password. Please check your details and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async (purpose: 'staff_first_time' | 'staff_2fa' | 'password_reset' | 'verify_2fa' | string) => {
+    let ident = (purpose === 'password_reset' ? resetIdentifier : (twoFaData?.identifier || identifier)).trim();
+    let targetPurpose = purpose;
+    if (purpose === 'verify_2fa' || purpose === '2fa') {
+      targetPurpose = twoFaData?.source === 'customers' ? 'customer_2fa' : 'staff_2fa';
+    }
+
+    if (!ident) {
+      setError('Identifier is missing. Please restart sign in.');
+      return;
+    }
+
+    setError('');
+    setLoading(true);
+    try {
+      const currentApiUrl = getResolvedBaseUrl();
+      const res = await axios.post(`${currentApiUrl}/auth/resend-otp`, {
+        identifier: ident,
+        purpose: targetPurpose
+      });
+      if (res.data?.dev_pin) {
+        console.log('====================================================');
+        console.log(`📱 [DEV OTP CONSOLE] 🔐 6-DIGIT PIN (${targetPurpose}):`, res.data.dev_pin);
+        console.log(`   Account:`, ident);
+        console.log('====================================================');
+        setDevPin(res.data.dev_pin);
+      }
+      setInfoMessage(res.data?.message || 'A fresh 6-digit verification code has been dispatched.');
+      if (res.data?.masked_phone) {
+        setMaskedPhone(res.data.masked_phone);
+      }
+    } catch (err: any) {
+      setError(err?.response?.data?.error || 'Could not resend code. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -414,8 +823,9 @@ const Home: React.FC = () => {
       return;
     }
 
-    if (signUpPassword.length < 4) {
-      setError('Password must be at least 4 characters long.');
+    const pwdStrength = evaluatePasswordStrength(signUpPassword);
+    if (!pwdStrength.isValid) {
+      setError(`Password requirement: ${pwdStrength.errors[0]}`);
       return;
     }
 
@@ -462,8 +872,6 @@ const Home: React.FC = () => {
     }
   };
 
-  const isOtpLocked = otpAttempts >= MAX_OTP_ATTEMPTS;
-
   return (
     <div style={{ maxWidth: '1080px', margin: '1.5rem auto', padding: '0 1rem' }}>
       {/* Location Drill-Down Filter (Revealed when clicking the Reservations link) */}
@@ -495,6 +903,7 @@ const Home: React.FC = () => {
                   setSelectedCountry('');
                   setSelectedState('');
                   setSelectedCity('');
+                  setLocationErrors({});
                 }}
                 style={{
                   padding: '0.45rem 0.85rem',
@@ -512,6 +921,27 @@ const Home: React.FC = () => {
             )}
           </div>
 
+          {(locationErrors.country || locationErrors.state || locationErrors.city) && (
+            <div
+              style={{
+                marginBottom: '1rem',
+                padding: '0.75rem 1rem',
+                borderRadius: '8px',
+                backgroundColor: '#fef2f2',
+                border: '1px solid #fecaca',
+                color: '#dc2626',
+                fontSize: '0.88rem',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}
+            >
+              <span>⚠️</span>
+              <span>Please select your Country, State / Province, and City to complete the reservation form.</span>
+            </div>
+          )}
+
           {/* 3-Step Location Filter: Country -> State -> City */}
           <div
             style={{
@@ -526,7 +956,7 @@ const Home: React.FC = () => {
                 htmlFor="filter-country"
                 style={{ display: 'block', fontWeight: 600, fontSize: '0.88rem', color: '#1e293b', marginBottom: '0.35rem' }}
               >
-                1. Country
+                1. Country <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <select
                 id="filter-country"
@@ -536,7 +966,7 @@ const Home: React.FC = () => {
                   width: '100%',
                   padding: '0.7rem 0.85rem',
                   borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
+                  border: locationErrors.country ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                   fontSize: '0.94rem',
                   backgroundColor: '#ffffff',
                   color: '#1e293b'
@@ -549,6 +979,11 @@ const Home: React.FC = () => {
                   </option>
                 ))}
               </select>
+              {locationErrors.country && (
+                <p style={{ margin: '4px 0 0', color: '#dc2626', fontSize: '0.82rem', fontWeight: 600 }}>
+                  {locationErrors.country}
+                </p>
+              )}
             </div>
 
             <div>
@@ -556,7 +991,7 @@ const Home: React.FC = () => {
                 htmlFor="filter-state"
                 style={{ display: 'block', fontWeight: 600, fontSize: '0.88rem', color: '#1e293b', marginBottom: '0.35rem' }}
               >
-                2. State / Province
+                2. State / Province <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <select
                 id="filter-state"
@@ -567,7 +1002,7 @@ const Home: React.FC = () => {
                   width: '100%',
                   padding: '0.7rem 0.85rem',
                   borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
+                  border: locationErrors.state ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                   fontSize: '0.94rem',
                   backgroundColor: selectedCountry ? '#ffffff' : '#f1f5f9',
                   color: '#1e293b',
@@ -583,6 +1018,11 @@ const Home: React.FC = () => {
                   </option>
                 ))}
               </select>
+              {locationErrors.state && (
+                <p style={{ margin: '4px 0 0', color: '#dc2626', fontSize: '0.82rem', fontWeight: 600 }}>
+                  {locationErrors.state}
+                </p>
+              )}
             </div>
 
             <div>
@@ -590,18 +1030,18 @@ const Home: React.FC = () => {
                 htmlFor="filter-city"
                 style={{ display: 'block', fontWeight: 600, fontSize: '0.88rem', color: '#1e293b', marginBottom: '0.35rem' }}
               >
-                3. City
+                3. City <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <select
                 id="filter-city"
                 value={selectedCity}
-                onChange={(e) => setSelectedCity(e.target.value)}
+                onChange={(e) => handleCityChange(e.target.value)}
                 disabled={!selectedState}
                 style={{
                   width: '100%',
                   padding: '0.7rem 0.85rem',
                   borderRadius: '8px',
-                  border: '1px solid #cbd5e1',
+                  border: locationErrors.city ? '1.5px solid #ef4444' : '1px solid #cbd5e1',
                   fontSize: '0.94rem',
                   backgroundColor: selectedState ? '#ffffff' : '#f1f5f9',
                   color: '#1e293b',
@@ -617,6 +1057,11 @@ const Home: React.FC = () => {
                   </option>
                 ))}
               </select>
+              {locationErrors.city && (
+                <p style={{ margin: '4px 0 0', color: '#dc2626', fontSize: '0.82rem', fontWeight: 600 }}>
+                  {locationErrors.city}
+                </p>
+              )}
             </div>
           </div>
 
@@ -665,13 +1110,13 @@ const Home: React.FC = () => {
                     >
                       <div>
                         <div style={{ fontWeight: 700, fontSize: '1.05rem', color: '#174b0f', marginBottom: '0.3rem' }}>
-                          {biz.business_name}
+                          📍 {biz.physical_address || `${biz.city}, ${biz.state}`}
                         </div>
                         <div style={{ fontSize: '0.86rem', color: '#475569', marginBottom: '0.4rem', lineHeight: 1.45 }}>
                           {biz.summary}
                         </div>
                         <div style={{ fontSize: '0.82rem', color: '#64748b' }}>
-                          📍 {biz.physical_address}
+                          {biz.city}, {biz.state}, {biz.country}
                         </div>
                         {biz.contact_phone && (
                           <div style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '0.2rem' }}>
@@ -743,10 +1188,7 @@ const Home: React.FC = () => {
           </p>
           <a
             href="#reservations"
-            onClick={(e) => {
-              e.preventDefault();
-              setShowReservationFinder(true);
-            }}
+            onClick={handleMakeReservationClick}
             style={{
               display: 'inline-block',
               padding: '0.75rem 1.25rem',
@@ -789,7 +1231,7 @@ const Home: React.FC = () => {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <button
                   type="button"
-                  onClick={() => setShowReservationFinder(true)}
+                  onClick={handleMakeReservationClick}
                   style={{
                     padding: '0.8rem 1rem',
                     borderRadius: '8px',
@@ -838,7 +1280,7 @@ const Home: React.FC = () => {
                       fontSize: '0.92rem'
                     }}
                   >
-                    Open Supervisor Control Panel
+                    Open {isAdmin ? 'Admin' : 'Business Owner'} Control Panel
                   </button>
                 )}
 
@@ -976,11 +1418,11 @@ const Home: React.FC = () => {
               {activeTab === 'signin' && (
                 <>
                   {signInStep === 'lookup' && (
-                    <form onSubmit={handleLookupSubmit}>
+                    <form onSubmit={handleSignInSubmit}>
                       <div style={{ marginBottom: '1rem' }}>
                         <label
                           htmlFor="home-login-identifier"
-                          style={{ display: 'block', fontWeight: 600, color: '#1e293b', marginBottom: '0.4rem', fontSize: '0.92rem' }}
+                          style={{ display: 'block', fontWeight: 600, color: '#1e293b', fontSize: '0.92rem', marginBottom: '0.4rem' }}
                         >
                           Phone Number or Email
                         </label>
@@ -1003,6 +1445,47 @@ const Home: React.FC = () => {
                         />
                       </div>
 
+                      <div style={{ marginBottom: '1.25rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                          <label
+                            htmlFor="home-login-password"
+                            style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.92rem' }}
+                          >
+                            Password
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => handleForgotPasswordRequest(identifier)}
+                            disabled={loading}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: '#174b0f',
+                              fontSize: '0.82rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              padding: 0
+                            }}
+                          >
+                            Forgot Password?
+                          </button>
+                        </div>
+                        <PasswordInput
+                          id="home-login-password"
+                          placeholder="Enter your password"
+                          value={signInPassword}
+                          onChange={(e) => setSignInPassword(e.target.value)}
+                          disabled={loading}
+                          required
+                          style={{
+                            padding: '0.75rem 0.9rem',
+                            borderRadius: '8px',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '0.95rem'
+                          }}
+                        />
+                      </div>
+
                       <button
                         type="submit"
                         disabled={loading}
@@ -1018,35 +1501,87 @@ const Home: React.FC = () => {
                           cursor: loading ? 'not-allowed' : 'pointer'
                         }}
                       >
-                        {loading ? 'Please wait...' : 'Continue'}
+                        {loading ? 'Verifying...' : 'Sign In'}
                       </button>
                     </form>
                   )}
 
-                  {signInStep === 'staff_otp' && (
-                    <form onSubmit={handleStaffOtpSubmit}>
-                      <div style={{ marginBottom: '1rem' }}>
-                        <label
-                          htmlFor="home-staff-otp"
-                          style={{ display: 'block', fontWeight: 600, color: '#1e293b', marginBottom: '0.4rem', fontSize: '0.92rem' }}
+                  {/* 2FA VERIFICATION CODE STEP (Shown only after correct email/phone + password) */}
+                  {signInStep === 'verify_2fa' && (
+                    <form onSubmit={handleVerify2faSubmit}>
+                      <div
+                        style={{
+                          backgroundColor: '#f0fdf4',
+                          border: '1px solid #bbf7d0',
+                          color: '#166534',
+                          padding: '0.75rem',
+                          borderRadius: '8px',
+                          fontSize: '0.85rem',
+                          marginBottom: '1rem'
+                        }}
+                      >
+                        <strong>Two-Factor Verification:</strong> Enter the 6-digit verification code sent to {maskedPhone ? `(${maskedPhone})` : 'your registered phone/email'}.
+                      </div>
+
+                      {devPin && (
+                        <div
+                          style={{
+                            backgroundColor: '#ecfdf5',
+                            border: '1px solid #10b981',
+                            color: '#065f46',
+                            padding: '0.6rem 0.8rem',
+                            borderRadius: '8px',
+                            fontSize: '0.88rem',
+                            fontWeight: 'bold',
+                            marginBottom: '1rem',
+                            textAlign: 'center'
+                          }}
                         >
-                          6-Digit Verification Code
-                        </label>
+                          🔐 DEV PIN (CONSOLE LOGGED): <span style={{ fontSize: '1.15rem', letterSpacing: '2px', color: '#047857' }}>{devPin}</span>
+                        </div>
+                      )}
+
+                      <div style={{ marginBottom: '1rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                          <label
+                            htmlFor="home-verification-otp"
+                            style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.88rem' }}
+                          >
+                            6-Digit Verification Code *
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => handleResendOtp('verify_2fa')}
+                            disabled={loading}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: '#174b0f',
+                              fontSize: '0.8rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              padding: 0
+                            }}
+                          >
+                            Resend Code
+                          </button>
+                        </div>
                         <input
-                          id="home-staff-otp"
+                          id="home-verification-otp"
                           type="text"
                           maxLength={6}
-                          placeholder="Enter 6-digit code"
-                          value={otpInput}
-                          onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))}
-                          disabled={loading || isOtpLocked}
+                          placeholder="123456"
+                          value={verificationOtp}
+                          onChange={(e) => setVerificationOtp(e.target.value.replace(/\D/g, ''))}
+                          disabled={loading}
                           required
+                          autoFocus
                           style={{
                             width: '100%',
-                            padding: '0.8rem',
+                            padding: '0.75rem',
                             borderRadius: '8px',
-                            border: `2px solid ${isOtpLocked ? '#dc2626' : '#174b0f'}`,
-                            fontSize: '1.15rem',
+                            border: '2px solid #174b0f',
+                            fontSize: '1.2rem',
                             letterSpacing: '0.3rem',
                             textAlign: 'center',
                             fontWeight: 700,
@@ -1058,7 +1593,7 @@ const Home: React.FC = () => {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
                         <button
                           type="submit"
-                          disabled={loading || isOtpLocked}
+                          disabled={loading}
                           style={{
                             width: '100%',
                             padding: '0.8rem',
@@ -1068,10 +1603,179 @@ const Home: React.FC = () => {
                             color: '#ffffff',
                             fontWeight: 700,
                             fontSize: '0.95rem',
-                            cursor: loading || isOtpLocked ? 'not-allowed' : 'pointer'
+                            cursor: loading ? 'not-allowed' : 'pointer'
                           }}
                         >
                           {loading ? 'Verifying...' : 'Verify & Sign In'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={resetSignInFlow}
+                          disabled={loading}
+                          style={{
+                            width: '100%',
+                            padding: '0.7rem',
+                            borderRadius: '8px',
+                            border: '1px solid #cbd5e1',
+                            backgroundColor: '#ffffff',
+                            color: '#475569',
+                            fontWeight: 600,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          ← Back to Sign In
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* STAFF FIRST-TIME SETUP */}
+                  {signInStep === 'staff_first_time' && (
+                    <form onSubmit={handleStaffFirstTimeSubmit}>
+                      <div
+                        style={{
+                          backgroundColor: '#f0fdf4',
+                          border: '1px solid #bbf7d0',
+                          color: '#166534',
+                          padding: '0.75rem',
+                          borderRadius: '8px',
+                          fontSize: '0.85rem',
+                          marginBottom: '1rem'
+                        }}
+                      >
+                        <strong>First-Time Staff Setup:</strong> Set a secure password and enter the 6-digit code sent to your phone {maskedPhone ? `(${maskedPhone})` : ''}.
+                      </div>
+
+                      {devPin && (
+                        <div
+                          style={{
+                            backgroundColor: '#ecfdf5',
+                            border: '1px solid #10b981',
+                            color: '#065f46',
+                            padding: '0.6rem 0.8rem',
+                            borderRadius: '8px',
+                            fontSize: '0.88rem',
+                            fontWeight: 'bold',
+                            marginBottom: '1rem',
+                            textAlign: 'center'
+                          }}
+                        >
+                          🔐 DEV PIN (CONSOLE LOGGED): <span style={{ fontSize: '1.15rem', letterSpacing: '2px', color: '#047857' }}>{devPin}</span>
+                        </div>
+                      )}
+
+                      <div style={{ marginBottom: '0.75rem' }}>
+                        <label
+                          htmlFor="home-staff-new-pwd"
+                          style={{ display: 'block', fontWeight: 600, color: '#1e293b', marginBottom: '0.35rem', fontSize: '0.88rem' }}
+                        >
+                          New Password *
+                        </label>
+                        <PasswordInput
+                          id="home-staff-new-pwd"
+                          placeholder="Create strong password"
+                          value={staffNewPassword}
+                          onChange={(e) => setStaffNewPassword(e.target.value)}
+                          disabled={loading}
+                          required
+                          style={{
+                            padding: '0.7rem 0.85rem',
+                            borderRadius: '8px',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '0.92rem'
+                          }}
+                        />
+                        <PasswordStrengthChecklist password={staffNewPassword} />
+                      </div>
+
+                      <div style={{ marginBottom: '0.75rem' }}>
+                        <label
+                          htmlFor="home-staff-confirm-pwd"
+                          style={{ display: 'block', fontWeight: 600, color: '#1e293b', marginBottom: '0.35rem', fontSize: '0.88rem' }}
+                        >
+                          Confirm Password *
+                        </label>
+                        <PasswordInput
+                          id="home-staff-confirm-pwd"
+                          placeholder="Confirm your password"
+                          value={staffConfirmPassword}
+                          onChange={(e) => setStaffConfirmPassword(e.target.value)}
+                          disabled={loading}
+                          required
+                          style={{
+                            padding: '0.7rem 0.85rem',
+                            borderRadius: '8px',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '0.92rem'
+                          }}
+                        />
+                      </div>
+
+                      <div style={{ marginBottom: '1rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                          <label
+                            htmlFor="home-staff-setup-otp"
+                            style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.88rem' }}
+                          >
+                            6-Digit Verification Code *
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => handleResendOtp('staff_first_time')}
+                            disabled={loading}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: '#174b0f',
+                              fontSize: '0.8rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              padding: 0
+                            }}
+                          >
+                            Resend Code
+                          </button>
+                        </div>
+                        <input
+                          id="home-staff-setup-otp"
+                          type="text"
+                          maxLength={6}
+                          placeholder="123456"
+                          value={staffSetupOtp}
+                          onChange={(e) => setStaffSetupOtp(e.target.value.replace(/\D/g, ''))}
+                          disabled={loading}
+                          required
+                          style={{
+                            width: '100%',
+                            padding: '0.75rem',
+                            borderRadius: '8px',
+                            border: '2px solid #174b0f',
+                            fontSize: '1.2rem',
+                            letterSpacing: '0.3rem',
+                            textAlign: 'center',
+                            fontWeight: 700,
+                            boxSizing: 'border-box'
+                          }}
+                        />
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                        <button
+                          type="submit"
+                          disabled={loading}
+                          style={{
+                            width: '100%',
+                            padding: '0.8rem',
+                            borderRadius: '8px',
+                            border: 'none',
+                            backgroundColor: '#174b0f',
+                            color: '#ffffff',
+                            fontWeight: 700,
+                            fontSize: '0.95rem',
+                            cursor: loading ? 'not-allowed' : 'pointer'
+                          }}
+                        >
+                          {loading ? 'Setting Password...' : 'Save Password & Sign In'}
                         </button>
                         <button
                           type="button"
@@ -1094,30 +1798,253 @@ const Home: React.FC = () => {
                     </form>
                   )}
 
+                  {/* STAFF PASSWORD */}
+                  {signInStep === 'staff_password' && (
+                    <form onSubmit={handleStaffPasswordSubmit}>
+                      <div style={{ marginBottom: '1rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                          <label
+                            htmlFor="home-staff-password"
+                            style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.92rem' }}
+                          >
+                            Staff Password
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => handleForgotPasswordRequest(identifier)}
+                            disabled={loading}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: '#174b0f',
+                              fontSize: '0.82rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              padding: 0
+                            }}
+                          >
+                            Forgot Password?
+                          </button>
+                        </div>
+                        <PasswordInput
+                          id="home-staff-password"
+                          placeholder="Enter your password"
+                          value={staffPassword}
+                          onChange={(e) => setStaffPassword(e.target.value)}
+                          disabled={loading}
+                          required
+                          style={{
+                            padding: '0.75rem 0.9rem',
+                            borderRadius: '8px',
+                            border: '1px solid #cbd5e1',
+                            fontSize: '0.95rem'
+                          }}
+                        />
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                        <button
+                          type="submit"
+                          disabled={loading}
+                          style={{
+                            width: '100%',
+                            padding: '0.8rem',
+                            borderRadius: '8px',
+                            border: 'none',
+                            backgroundColor: '#174b0f',
+                            color: '#ffffff',
+                            fontWeight: 700,
+                            fontSize: '0.95rem',
+                            cursor: loading ? 'not-allowed' : 'pointer'
+                          }}
+                        >
+                          {loading ? 'Verifying...' : 'Continue'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={resetSignInFlow}
+                          disabled={loading}
+                          style={{
+                            width: '100%',
+                            padding: '0.7rem',
+                            borderRadius: '8px',
+                            border: '1px solid #cbd5e1',
+                            backgroundColor: '#ffffff',
+                            color: '#475569',
+                            fontWeight: 600,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          ← Back
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* STAFF 2FA */}
+                  {signInStep === 'staff_2fa' && (
+                    <form onSubmit={handleStaff2faSubmit}>
+                      <div
+                        style={{
+                          backgroundColor: '#f0fdf4',
+                          border: '1px solid #bbf7d0',
+                          color: '#166534',
+                          padding: '0.75rem',
+                          borderRadius: '8px',
+                          fontSize: '0.85rem',
+                          marginBottom: '1rem'
+                        }}
+                      >
+                        <strong>Two-Factor Authentication:</strong> Enter the 6-digit code sent to your phone {maskedPhone ? `(${maskedPhone})` : ''}.
+                      </div>
+
+                      {devPin && (
+                        <div
+                          style={{
+                            backgroundColor: '#ecfdf5',
+                            border: '1px solid #10b981',
+                            color: '#065f46',
+                            padding: '0.6rem 0.8rem',
+                            borderRadius: '8px',
+                            fontSize: '0.88rem',
+                            fontWeight: 'bold',
+                            marginBottom: '1rem',
+                            textAlign: 'center'
+                          }}
+                        >
+                          🔐 DEV PIN (CONSOLE LOGGED): <span style={{ fontSize: '1.15rem', letterSpacing: '2px', color: '#047857' }}>{devPin}</span>
+                        </div>
+                      )}
+
+                      <div style={{ marginBottom: '1rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                          <label
+                            htmlFor="home-staff-2fa-otp"
+                            style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.88rem' }}
+                          >
+                            6-Digit Verification Code *
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => handleResendOtp('staff_2fa')}
+                            disabled={loading}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: '#174b0f',
+                              fontSize: '0.8rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              padding: 0
+                            }}
+                          >
+                            Resend Code
+                          </button>
+                        </div>
+                        <input
+                          id="home-staff-2fa-otp"
+                          type="text"
+                          maxLength={6}
+                          placeholder="123456"
+                          value={staff2faOtp}
+                          onChange={(e) => setStaff2faOtp(e.target.value.replace(/\D/g, ''))}
+                          disabled={loading}
+                          required
+                          style={{
+                            width: '100%',
+                            padding: '0.75rem',
+                            borderRadius: '8px',
+                            border: '2px solid #174b0f',
+                            fontSize: '1.2rem',
+                            letterSpacing: '0.3rem',
+                            textAlign: 'center',
+                            fontWeight: 700,
+                            boxSizing: 'border-box'
+                          }}
+                        />
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                        <button
+                          type="submit"
+                          disabled={loading}
+                          style={{
+                            width: '100%',
+                            padding: '0.8rem',
+                            borderRadius: '8px',
+                            border: 'none',
+                            backgroundColor: '#174b0f',
+                            color: '#ffffff',
+                            fontWeight: 700,
+                            fontSize: '0.95rem',
+                            cursor: loading ? 'not-allowed' : 'pointer'
+                          }}
+                        >
+                          {loading ? 'Verifying...' : 'Verify & Sign In'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSignInStep('staff_password')}
+                          disabled={loading}
+                          style={{
+                            width: '100%',
+                            padding: '0.7rem',
+                            borderRadius: '8px',
+                            border: '1px solid #cbd5e1',
+                            backgroundColor: '#ffffff',
+                            color: '#475569',
+                            fontWeight: 600,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          ← Back to Password
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  {/* CUSTOMER PASSWORD */}
                   {signInStep === 'customer_password' && (
                     <form onSubmit={handleCustomerPasswordSubmit}>
                       <div style={{ marginBottom: '1rem' }}>
-                        <label
-                          htmlFor="home-customer-password"
-                          style={{ display: 'block', fontWeight: 600, color: '#1e293b', marginBottom: '0.4rem', fontSize: '0.92rem' }}
-                        >
-                          {customerHasPassword ? 'Password' : 'Create Password'}
-                        </label>
-                        <input
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                          <label
+                            htmlFor="home-customer-password"
+                            style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.92rem' }}
+                          >
+                            {customerHasPassword ? 'Password' : 'Create Password'}
+                          </label>
+                          {customerHasPassword && (
+                            <button
+                              type="button"
+                              onClick={() => handleForgotPasswordRequest(identifier)}
+                              disabled={loading}
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                color: '#174b0f',
+                                fontSize: '0.82rem',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                padding: 0
+                              }}
+                            >
+                              Forgot Password?
+                            </button>
+                          )}
+                        </div>
+                        <PasswordInput
                           id="home-customer-password"
-                          type="password"
                           placeholder="Enter your password"
                           value={customerPassword}
                           onChange={(e) => setCustomerPassword(e.target.value)}
                           disabled={loading}
                           required
                           style={{
-                            width: '100%',
                             padding: '0.75rem 0.9rem',
                             borderRadius: '8px',
                             border: '1px solid #cbd5e1',
-                            fontSize: '0.95rem',
-                            boxSizing: 'border-box'
+                            fontSize: '0.95rem'
                           }}
                         />
                       </div>
@@ -1159,6 +2086,244 @@ const Home: React.FC = () => {
                         </button>
                       </div>
                     </form>
+                  )}
+
+                  {/* FORGOT PASSWORD */}
+                  {signInStep === 'forgot_password' && (
+                    <>
+                      {/* STEP 1: VERIFY 6-DIGIT CODE */}
+                      {resetStep === 'enter_code' && (
+                        <form onSubmit={handleVerifyResetCode}>
+                          <div
+                            style={{
+                              backgroundColor: '#fef3c7',
+                              border: '1px solid #fde68a',
+                              color: '#92400e',
+                              padding: '0.75rem',
+                              borderRadius: '8px',
+                              fontSize: '0.85rem',
+                              marginBottom: '1rem'
+                            }}
+                          >
+                            <strong>Step 1 of 2:</strong> Enter the 6-digit code sent to {maskedPhone ? `(${maskedPhone})` : 'your phone/email'} to verify your identity.
+                          </div>
+
+                          {devPin && (
+                            <div
+                              style={{
+                                backgroundColor: '#ecfdf5',
+                                border: '1px solid #10b981',
+                                color: '#065f46',
+                                padding: '0.6rem 0.8rem',
+                                borderRadius: '8px',
+                                fontSize: '0.88rem',
+                                fontWeight: 'bold',
+                                marginBottom: '1rem',
+                                textAlign: 'center'
+                              }}
+                            >
+                              🔐 DEV PIN (CONSOLE LOGGED): <span style={{ fontSize: '1.15rem', letterSpacing: '2px', color: '#047857' }}>{devPin}</span>
+                            </div>
+                          )}
+
+                          <div style={{ marginBottom: '1rem' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                              <label
+                                htmlFor="home-reset-otp"
+                                style={{ fontWeight: 600, color: '#1e293b', fontSize: '0.88rem' }}
+                              >
+                                6-Digit Reset Code *
+                              </label>
+                              <button
+                                type="button"
+                                onClick={() => handleResendOtp('password_reset')}
+                                disabled={loading}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  color: '#174b0f',
+                                  fontSize: '0.8rem',
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                  padding: 0
+                                }}
+                              >
+                                Resend Code
+                              </button>
+                            </div>
+                            <input
+                              id="home-reset-otp"
+                              type="text"
+                              maxLength={6}
+                              placeholder="123456"
+                              value={resetOtp}
+                              onChange={(e) => setResetOtp(e.target.value.replace(/\D/g, ''))}
+                              disabled={loading}
+                              required
+                              autoFocus
+                              style={{
+                                width: '100%',
+                                padding: '0.75rem',
+                                borderRadius: '8px',
+                                border: '2px solid #b45309',
+                                fontSize: '1.2rem',
+                                letterSpacing: '0.3rem',
+                                textAlign: 'center',
+                                fontWeight: 700,
+                                boxSizing: 'border-box'
+                              }}
+                            />
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                            <button
+                              type="submit"
+                              disabled={loading || resetOtp.length !== 6}
+                              style={{
+                                width: '100%',
+                                padding: '0.8rem',
+                                borderRadius: '8px',
+                                border: 'none',
+                                backgroundColor: '#174b0f',
+                                color: '#ffffff',
+                                fontWeight: 700,
+                                fontSize: '0.95rem',
+                                cursor: (loading || resetOtp.length !== 6) ? 'not-allowed' : 'pointer'
+                              }}
+                            >
+                              {loading ? 'Verifying Code...' : 'Verify Code'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={resetSignInFlow}
+                              disabled={loading}
+                              style={{
+                                width: '100%',
+                                padding: '0.7rem',
+                                borderRadius: '8px',
+                                border: '1px solid #cbd5e1',
+                                backgroundColor: '#ffffff',
+                                color: '#475569',
+                                fontWeight: 600,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              ← Back to Sign In
+                            </button>
+                          </div>
+                        </form>
+                      )}
+
+                      {/* STEP 2: SET NEW PASSWORD (Revealed ONLY after identity verification!) */}
+                      {resetStep === 'set_password' && (
+                        <form onSubmit={handleResetPasswordSubmit}>
+                          <div
+                            style={{
+                              backgroundColor: '#f0fdf4',
+                              border: '1px solid #bbf7d0',
+                              color: '#166534',
+                              padding: '0.75rem',
+                              borderRadius: '8px',
+                              fontSize: '0.85rem',
+                              marginBottom: '1rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '8px'
+                            }}
+                          >
+                            <span style={{ fontSize: '1.2rem' }}>✓</span>
+                            <div>
+                              <strong>Step 2 of 2:</strong> Code verified! Now create your new password (cannot be your last password).
+                            </div>
+                          </div>
+
+                          <div style={{ marginBottom: '0.75rem' }}>
+                            <label
+                              htmlFor="home-reset-new-pwd"
+                              style={{ display: 'block', fontWeight: 600, color: '#1e293b', marginBottom: '0.35rem', fontSize: '0.88rem' }}
+                            >
+                              New Password *
+                            </label>
+                            <PasswordInput
+                              id="home-reset-new-pwd"
+                              placeholder="Enter new strong password"
+                              value={resetNewPassword}
+                              onChange={(e) => setResetNewPassword(e.target.value)}
+                              disabled={loading}
+                              required
+                              autoFocus
+                              style={{
+                                padding: '0.7rem 0.85rem',
+                                borderRadius: '8px',
+                                border: '1px solid #cbd5e1',
+                                fontSize: '0.92rem'
+                              }}
+                            />
+                            <PasswordStrengthChecklist password={resetNewPassword} />
+                          </div>
+
+                          <div style={{ marginBottom: '1rem' }}>
+                            <label
+                              htmlFor="home-reset-confirm-pwd"
+                              style={{ display: 'block', fontWeight: 600, color: '#1e293b', marginBottom: '0.35rem', fontSize: '0.88rem' }}
+                            >
+                              Confirm New Password *
+                            </label>
+                            <PasswordInput
+                              id="home-reset-confirm-pwd"
+                              placeholder="Confirm new password"
+                              value={resetConfirmPassword}
+                              onChange={(e) => setResetConfirmPassword(e.target.value)}
+                              disabled={loading}
+                              required
+                              style={{
+                                padding: '0.7rem 0.85rem',
+                                borderRadius: '8px',
+                                border: '1px solid #cbd5e1',
+                                fontSize: '0.92rem'
+                              }}
+                            />
+                          </div>
+
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                            <button
+                              type="submit"
+                              disabled={loading}
+                              style={{
+                                width: '100%',
+                                padding: '0.8rem',
+                                borderRadius: '8px',
+                                border: 'none',
+                                backgroundColor: '#174b0f',
+                                color: '#ffffff',
+                                fontWeight: 700,
+                                fontSize: '0.95rem',
+                                cursor: loading ? 'not-allowed' : 'pointer'
+                              }}
+                            >
+                              {loading ? 'Resetting Password...' : 'Reset Password'}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={resetSignInFlow}
+                              disabled={loading}
+                              style={{
+                                width: '100%',
+                                padding: '0.7rem',
+                                borderRadius: '8px',
+                                border: '1px solid #cbd5e1',
+                                backgroundColor: '#ffffff',
+                                color: '#475569',
+                                fontWeight: 600,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              ← Back to Sign In
+                            </button>
+                          </div>
+                        </form>
+                      )}
+                    </>
                   )}
                 </>
               )}
@@ -1259,22 +2424,20 @@ const Home: React.FC = () => {
                     <label style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem', color: '#1e293b', marginBottom: '0.3rem' }}>
                       Password *
                     </label>
-                    <input
-                      type="password"
+                    <PasswordInput
                       value={signUpPassword}
                       onChange={(e) => setSignUpPassword(e.target.value)}
                       placeholder="Create a password"
                       required
                       disabled={loading}
                       style={{
-                        width: '100%',
                         padding: '0.65rem 0.75rem',
                         borderRadius: '8px',
                         border: '1px solid #cbd5e1',
-                        fontSize: '0.9rem',
-                        boxSizing: 'border-box'
+                        fontSize: '0.9rem'
                       }}
                     />
+                    <PasswordStrengthChecklist password={signUpPassword} />
                   </div>
 
                   <label

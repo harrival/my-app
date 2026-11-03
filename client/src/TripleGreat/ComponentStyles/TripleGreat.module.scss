@@ -70,6 +70,18 @@
   border-color: #fde68a;
 }
 
+.pillDanger {
+  background: #fee2e2;
+  color: #991b1b;
+  border-color: #fca5a5;
+}
+
+.pillInfo {
+  background: #e0f2fe;
+  color: #0369a1;
+  border-color: #bae6fd;
+}
+
 .switcherBar {
   background: #ffffff;
   border: 1px solid #d1e7cc;
@@ -141,6 +153,41 @@
   grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
   gap: 18px;
   margin-bottom: 20px;
+  align-items: start;
+}
+
+.inventoryCard {
+  max-height: 400px;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.inventoryList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  max-height: 400px;
+  min-height: 0;
+  flex: 1 1 auto;
+  padding-right: 6px;
+
+  &::-webkit-scrollbar {
+    width: 6px;
+  }
+  &::-webkit-scrollbar-track {
+    background: #f1f8f0;
+    border-radius: 4px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #a3cfa0;
+    border-radius: 4px;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: #174b0f;
+  }
 }
 
 .gridThree {
@@ -274,6 +321,30 @@
 
   &:hover:not(:disabled) {
     background: #216616;
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}
+
+.dangerBtn {
+  background: #dc2626;
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 16px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+
+  &:hover:not(:disabled) {
+    background: #b91c1c;
   }
 
   &:disabled {

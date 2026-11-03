@@ -6,11 +6,12 @@ const express = require("express");
 const router = express.Router();
 const { getBusinessRecord, upsertBusinessRecord } = require("../services/businessService");
 
-/** When a Supervisor is saved in users_table, create/link their business in business_table. */
+/** When a Business_Owner (or legacy Supervisor) is saved in users_table, create/link their business in business_table. */
 async function linkSupervisorBusiness(tableName, row) {
+  const normGroup = String(row?.permission_group || "").toLowerCase();
   if (
     String(tableName).toLowerCase() !== "users_table" ||
-    String(row?.permission_group || "").toLowerCase() !== "supervisor" ||
+    (normGroup !== "business_owner" && normGroup !== "supervisor") ||
     !String(row?.business || "").trim()
   ) return;
   try {
@@ -28,7 +29,7 @@ async function linkSupervisorBusiness(tableName, row) {
       row.user_guid
     );
   } catch (err) {
-    console.error("Failed to link supervisor business:", err.message);
+    console.error("Failed to link business owner business:", err.message);
   }
 }
 
@@ -38,6 +39,8 @@ const SCOPED_TABLES = [
   'puzzles_type',
   'reps_table',
   'users_table',
+  'roles_table',
+  'business_table',
   'customers',
   'business_settings',
   'business_templates',
@@ -75,12 +78,39 @@ function isScopedTable(tableName) {
 function applyStrictTenantFilter(req, tableName, filters) {
   if (!tableName) return filters;
   const lower = tableName.toLowerCase();
+  const isAdmin = req.headers['x-is-admin'] === 'true' || req.headers['x-is-admin'] === '1' || req.headers['x-user-role']?.toLowerCase() === 'admin';
+  // Admin user does not own a business and can view all by default
+  if (isAdmin && !filters.business) {
+    return filters;
+  }
   const headerBusiness = req.headers['x-tenant-business'] || req.headers['x-user-business'];
   if (STRICT_TENANT_TABLES.has(lower) && !filters.business && headerBusiness) {
     return { ...filters, business: headerBusiness };
   }
   return filters;
 }
+
+/**
+ * GET /api/admin/business-owners
+ * Returns all Business Owners for Admin filtering.
+ * Each owner includes contact and address info (no business name required on frontend).
+ */
+router.get("/api/admin/business-owners", async function (req, res, next) {
+  try {
+    const result = await db.query(`
+      SELECT u.user_guid, u.first_name, u.last_name, u.email, u.phone_number, u.address, u.business,
+             COALESCE(b.business_name, u.business) AS business_name,
+             b.physical_address, b.contact_phone, b.contact_email, b.city, b.state, b.country
+      FROM users_table u
+      LEFT JOIN business_table b ON LOWER(u.business) = LOWER(b.business)
+      WHERE LOWER(u.permission_group) = 'business_owner' OR LOWER(u.permission_group) = 'supervisor'
+      ORDER BY u.first_name ASC, u.last_name ASC
+    `);
+    return res.json(result.rows);
+  } catch (err) {
+    return next(err);
+  }
+});
 
 /** Get users: [user, user, user] */
 
@@ -307,6 +337,21 @@ router.get("/dbsearch", async function (req, res, next) {
 
 
 
+/**
+ * GET /api/roles
+ * Retrieve all roles defined in roles_table (metadata-driven).
+ */
+router.get("/api/roles", async function (req, res, next) {
+  try {
+    const results = await db.query(
+      "SELECT id, role, description, is_elevated FROM roles_table ORDER BY id ASC"
+    );
+    return res.json(results.rows);
+  } catch (err) {
+    return next(err);
+  }
+});
+
 /** Create new user, return user */
 
 router.post("/addToTable", async function (req, res, next) {
@@ -315,6 +360,23 @@ router.post("/addToTable", async function (req, res, next) {
 
     if (!tableName || !fields || typeof fields !== 'object') {
       return res.status(400).json({ error: "Invalid input data" });
+    }
+
+    if (String(tableName).toLowerCase() === "users_table") {
+      if (fields.permission_group && String(fields.permission_group).toLowerCase() === "supervisor") {
+        fields.permission_group = "Business_Owner";
+      }
+      if (!fields.role_id && fields.permission_group) {
+        try {
+          const roleRes = await db.query(
+            "SELECT id FROM roles_table WHERE LOWER(role) = LOWER($1) LIMIT 1",
+            [fields.permission_group]
+          );
+          if (roleRes.rows.length > 0) {
+            fields.role_id = roleRes.rows[0].id;
+          }
+        } catch {}
+      }
     }
 
     const fieldNames = Object.keys(fields).join(", ");
@@ -376,6 +438,23 @@ router.patch("/editPlayerForm/:id", async function (req, res, next) {
       ...fields
     } = req.body;
 
+    if (String(tableName).toLowerCase() === "users_table") {
+      if (fields.permission_group && String(fields.permission_group).toLowerCase() === "supervisor") {
+        fields.permission_group = "Business_Owner";
+      }
+      if (fields.permission_group && !fields.role_id) {
+        try {
+          const roleRes = await db.query(
+            "SELECT id FROM roles_table WHERE LOWER(role) = LOWER($1) LIMIT 1",
+            [fields.permission_group]
+          );
+          if (roleRes.rows.length > 0) {
+            fields.role_id = roleRes.rows[0].id;
+          }
+        } catch {}
+      }
+    }
+
     const queryParams = [];
     let querySet = [];
     let paramIdx = 1;
@@ -429,6 +508,8 @@ router.delete("/deletePlayer/:id", async function (req, res, next) {
   }
 });
 const userProfiles = {};
+const activeOtps = new Map();
+router._activeOtps = activeOtps;
 
 function normalizePhoneDigits(rawPhone) {
   const digits = String(rawPhone || "").replace(/\D/g, "");
@@ -436,6 +517,111 @@ function normalizePhoneDigits(rawPhone) {
     return digits.slice(1);
   }
   return digits;
+}
+
+function maskPhone(rawPhone) {
+  const digits = normalizePhoneDigits(rawPhone);
+  if (!digits || digits.length < 4) return "***-***-****";
+  const last4 = digits.slice(-4);
+  const prefix = digits.length >= 7 ? digits.slice(0, 3) : "***";
+  return `(${prefix}) ***-${last4}`;
+}
+
+function validatePasswordStrength(password) {
+  const pwd = String(password || "");
+  const minLength = pwd.length >= 8;
+  const hasUpper = /[A-Z]/.test(pwd);
+  const hasLower = /[a-z]/.test(pwd);
+  const hasNumber = /[0-9]/.test(pwd);
+  const hasSpecial = /[^A-Za-z0-9]/.test(pwd);
+
+  const errors = [];
+  if (!minLength) errors.push("Password must be at least 8 characters long.");
+  if (!hasUpper) errors.push("Password must contain at least 1 uppercase letter (A-Z).");
+  if (!hasLower) errors.push("Password must contain at least 1 lowercase letter (a-z).");
+  if (!hasNumber) errors.push("Password must contain at least 1 number (0-9).");
+  if (!hasSpecial) errors.push("Password must contain at least 1 special character (!@#$%^&*...).");
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    checks: { minLength, hasUpper, hasLower, hasNumber, hasSpecial }
+  };
+}
+
+function normalizeOtpIdentifier(identifier) {
+  const raw = String(identifier || "").trim().toLowerCase();
+  if (raw.includes("@")) {
+    return raw;
+  }
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length === 11 && digits.startsWith("1")) {
+    return digits.slice(1);
+  }
+  return digits || raw;
+}
+
+function generateAndStoreOtp(identifier, purpose, extra = {}) {
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  const normalized = normalizeOtpIdentifier(identifier);
+  const key = `${normalized}:${purpose}`;
+  activeOtps.set(key, {
+    code,
+    identifier: normalized,
+    expiresAt: Date.now() + 10 * 60 * 1000,
+    attempts: 0,
+    ...extra
+  });
+
+  const recipientLabel = extra.name ? `${extra.name} <${identifier}>` : identifier;
+  const phoneLabel = extra.phone ? ` | Phone: ${extra.phone}` : "";
+
+  console.log("====================================================");
+  console.log(`📱 [DEV OTP DISPATCH] Purpose: ${purpose.toUpperCase()}`);
+  console.log(`   Recipient: ${recipientLabel}${phoneLabel}`);
+  console.log(`   🔐 6-DIGIT VERIFICATION PIN: ${code}`);
+  console.log(`   Expires in: 10 minutes`);
+  console.log("====================================================");
+
+  return code;
+}
+
+function verifyStoredOtp(identifier, purpose, code) {
+  const normalized = normalizeOtpIdentifier(identifier);
+  const key = `${normalized}:${purpose}`;
+  const entry = activeOtps.get(key);
+  if (!entry) {
+    return {
+      valid: false,
+      error: "No verification code was requested, or the code has expired. Please request a new code."
+    };
+  }
+  if (Date.now() > entry.expiresAt) {
+    activeOtps.delete(key);
+    return {
+      valid: false,
+      error: "Verification code has expired. Please request a new code."
+    };
+  }
+  if (entry.attempts >= 3) {
+    activeOtps.delete(key);
+    return {
+      valid: false,
+      error: "Too many failed attempts. Please request a new code."
+    };
+  }
+  if (String(entry.code).trim() !== String(code).trim()) {
+    entry.attempts += 1;
+    const remaining = 3 - entry.attempts;
+    return {
+      valid: false,
+      error: `Incorrect verification code. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.`
+    };
+  }
+
+  // Code matches! Clear the used OTP
+  activeOtps.delete(key);
+  return { valid: true, entry };
 }
 
 function hashCustomerPassword(password) {
@@ -455,6 +641,25 @@ function verifyCustomerPassword(password, storedHash) {
   const keyBuf = Buffer.from(keyHex, "hex");
   if (derived.length !== keyBuf.length) return false;
   return crypto.timingSafeEqual(derived, keyBuf);
+}
+
+function toStaffSessionProfile(staffRow) {
+  const business = staffRow.business || null;
+  return {
+    id: staffRow.id,
+    user_guid: staffRow.user_guid,
+    first_name: staffRow.first_name,
+    last_name: staffRow.last_name,
+    email: staffRow.email,
+    phone_number: staffRow.phone_number,
+    address: staffRow.address || "",
+    role_id: staffRow.role_id,
+    permission_group: staffRow.permission_group,
+    is_admin: Boolean(staffRow.is_admin),
+    business,
+    business_value: business || staffRow.permission_group,
+    account_source: "users_table",
+  };
 }
 
 function toCustomerSessionProfile(customerRow) {
@@ -480,8 +685,10 @@ function toCustomerSessionProfile(customerRow) {
 /**
  * POST /auth/lookup
  * Dual-table sign-in lookup:
- * 1. First checks `users_table` (Staff) -> if found, returns auth_method = 'OTP_6_DIGIT'
- * 2. If not found in `users_table`, checks `customers` table -> if found, returns auth_method = 'PASSWORD'
+ * 1. Checks `users_table` (Staff) ->
+ *    - If no password_hash: returns auth_method = 'STAFF_FIRST_TIME' and sends initial OTP
+ *    - If password_hash exists: returns auth_method = 'PASSWORD' (staff password prompt)
+ * 2. Checks `customers` table -> returns auth_method = 'PASSWORD'
  */
 router.post("/auth/lookup", async function (req, res, next) {
   try {
@@ -498,7 +705,7 @@ router.post("/auth/lookup", async function (req, res, next) {
     const isEmail = rawIdentifier.includes("@");
     const dbPhone = normalizePhoneDigits(rawIdentifier);
 
-    // 1. FIRST CHECK: users_table (Staff accounts sign in with 6-digit code)
+    // 1. FIRST CHECK: users_table (Staff)
     let staffResult;
     if (isEmail) {
       staffResult = await db.query(
@@ -522,18 +729,44 @@ router.post("/auth/lookup", async function (req, res, next) {
 
     if (staffResult.rows.length > 0) {
       const staffUser = staffResult.rows[0];
+      const hasPassword = Boolean(staffUser.password_hash);
+      const maskedPhone = maskPhone(staffUser.phone_number);
+
+      if (!hasPassword) {
+        // First-time staff login: Generate and send 6-digit PIN
+        const code = generateAndStoreOtp(rawIdentifier, "staff_first_time", {
+          userGuid: staffUser.user_guid,
+          phone: staffUser.phone_number,
+          name: `${staffUser.first_name || ""} ${staffUser.last_name || ""}`.trim()
+        });
+
+        return res.json({
+          found: true,
+          source: "users_table",
+          is_staff: true,
+          is_first_time: true,
+          auth_method: "STAFF_FIRST_TIME",
+          dev_pin: code,
+          masked_phone: maskedPhone,
+          account: toStaffSessionProfile(staffUser),
+          message: "Welcome to Triple Great! Please set your password and enter the 6-digit verification code sent to your phone."
+        });
+      }
+
+      // Returning staff login: signs in with email/phone and password
       return res.json({
         found: true,
         source: "users_table",
-        auth_method: "OTP_6_DIGIT",
-        account: {
-          ...staffUser,
-          account_source: "users_table",
-        },
+        is_staff: true,
+        is_first_time: false,
+        auth_method: "PASSWORD",
+        has_password: true,
+        masked_phone: maskedPhone,
+        account: toStaffSessionProfile(staffUser)
       });
     }
 
-    // 2. SECOND CHECK: customers table (Customer accounts are enterprise-wide and sign in with password)
+    // 2. SECOND CHECK: customers table
     let custResult;
     if (isEmail) {
       custResult = await db.query(
@@ -557,8 +790,11 @@ router.post("/auth/lookup", async function (req, res, next) {
       return res.json({
         found: true,
         source: "customers",
+        is_staff: false,
+        is_first_time: false,
         auth_method: "PASSWORD",
         has_password: Boolean(customerRow.password_hash),
+        masked_phone: maskPhone(customerRow.phone_number),
         account: toCustomerSessionProfile(customerRow),
       });
     }
@@ -568,6 +804,908 @@ router.post("/auth/lookup", async function (req, res, next) {
       source: null,
       auth_method: null,
       message: "No account found with those details. Please create an account to continue.",
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/**
+ * POST /auth/staff/setup-password
+ * First-time staff sign-in: sets strong password and verifies 6-digit PIN.
+ */
+router.post("/auth/staff/setup-password", async function (req, res, next) {
+  try {
+    const rawIdentifier = String(req.body?.identifier || "").trim();
+    const password = String(req.body?.password || "");
+    const otp = String(req.body?.otp || "").trim();
+    const userGuid = String(req.body?.user_guid || "").trim();
+
+    if (!rawIdentifier || !password || !otp) {
+      return res.status(400).json({ error: "Email/phone, password, and 6-digit verification code are required." });
+    }
+
+    // 1. Force strong password
+    const pwdCheck = validatePasswordStrength(password);
+    if (!pwdCheck.valid) {
+      return res.status(400).json({
+        error: pwdCheck.errors[0] || "Password does not meet complexity requirements.",
+        details: pwdCheck.errors
+      });
+    }
+
+    // 2. Validate OTP
+    const otpCheck = verifyStoredOtp(rawIdentifier, "staff_first_time", otp);
+    if (!otpCheck.valid) {
+      return res.status(400).json({ error: otpCheck.error });
+    }
+
+    // 3. Find user in users_table
+    let query = "SELECT * FROM users_table WHERE user_guid = $1 LIMIT 1";
+    let params = [userGuid];
+    if (!userGuid) {
+      if (rawIdentifier.includes("@")) {
+        query = "SELECT * FROM users_table WHERE LOWER(email) = LOWER($1) LIMIT 1";
+        params = [rawIdentifier];
+      } else {
+        const dbPhone = normalizePhoneDigits(rawIdentifier);
+        query = "SELECT * FROM users_table WHERE REGEXP_REPLACE(COALESCE(phone_number, ''), '\\D', '', 'g') = $1 LIMIT 1";
+        params = [dbPhone];
+      }
+    }
+
+    const staffRes = await db.query(query, params);
+    if (staffRes.rows.length === 0) {
+      return res.status(404).json({ error: "Staff account not found." });
+    }
+
+    const staffUser = staffRes.rows[0];
+
+    // Restrict staff from reusing last password
+    if (
+      (staffUser.password_hash && verifyCustomerPassword(password, staffUser.password_hash)) ||
+      (staffUser.last_password_hash && verifyCustomerPassword(password, staffUser.last_password_hash))
+    ) {
+      return res.status(400).json({
+        error: "You cannot reuse your last password. Please choose a different password."
+      });
+    }
+
+    const newHash = hashCustomerPassword(password);
+    const prevHash = staffUser.password_hash || null;
+
+    await db.query(
+      `UPDATE users_table SET password_hash = $1, last_password_hash = $2 WHERE user_guid = $3`,
+      [newHash, prevHash, staffUser.user_guid]
+    );
+
+    // Record password setup in supervisor_audit_logs
+    try {
+      const logGuid = `audit_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+      const logBusiness = String(staffUser.business || "all").trim();
+      const entityRole = staffUser.permission_group || "Staff";
+      const entityGuid = staffUser.user_guid;
+      const actorIdentifier = staffUser.email || staffUser.phone_number || entityGuid;
+      const actorName = `${staffUser.first_name || ""} ${staffUser.last_name || ""}`.trim() || actorIdentifier;
+
+      const reason = `Initial password setup via 6-digit verification code by ${actorName} (${entityRole})`;
+      const beforeState = {
+        role: entityRole,
+        account_type: "staff",
+        has_previous_password: Boolean(prevHash),
+        email: staffUser.email || null,
+      };
+      const afterState = {
+        role: entityRole,
+        account_type: "staff",
+        status: "password_setup_successful",
+        email: staffUser.email || null,
+      };
+
+      await db.query(
+        `INSERT INTO supervisor_audit_logs 
+          (log_guid, business, actor_guid, action, entity_type, entity_guid, reason, before_state, after_state, time_created)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP)`,
+        [
+          logGuid,
+          logBusiness,
+          actorIdentifier,
+          "PASSWORD_RESET",
+          entityRole,
+          entityGuid,
+          reason,
+          JSON.stringify(beforeState),
+          JSON.stringify(afterState),
+        ]
+      );
+    } catch (auditErr) {
+      console.error("⚠️ Failed to record staff setup password in supervisor_audit_logs:", auditErr.message);
+    }
+
+    const sessionProfile = toStaffSessionProfile(staffUser);
+    userProfiles[sessionProfile.user_guid] = sessionProfile;
+
+    return res.json({
+      success: true,
+      message: "Password created successfully!",
+      profile: sessionProfile
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/**
+ * POST /auth/login
+ * Validates identifier (email or phone) and password for either staff (users_table) or customer (customers).
+ * If credentials are correct, generates a 6-digit OTP verification code for 2FA, logs it in console, and returns require_2fa: true.
+ */
+router.post("/auth/login", async function (req, res, next) {
+  try {
+    const rawIdentifier = String(req.body?.identifier || "").trim();
+    const password = String(req.body?.password || "");
+
+    if (!rawIdentifier || !password) {
+      return res.status(400).json({ error: "Email or phone number and password are required." });
+    }
+
+    const isEmail = rawIdentifier.includes("@");
+    const dbPhone = normalizePhoneDigits(rawIdentifier);
+
+    // 1. Check users_table (staff, business owners, agents, admins)
+    let staffQuery, staffParams;
+    if (isEmail) {
+      staffQuery = "SELECT * FROM users_table WHERE LOWER(email) = LOWER($1) LIMIT 1";
+      staffParams = [rawIdentifier];
+    } else {
+      staffQuery = `SELECT * FROM users_table
+                    WHERE RIGHT(REGEXP_REPLACE(COALESCE(phone_number, ''), '\\D', '', 'g'), 10) = RIGHT($1, 10)
+                       OR REGEXP_REPLACE(COALESCE(phone_number, ''), '\\D', '', 'g') = $1
+                       OR phone_number = $2 LIMIT 1`;
+      staffParams = [dbPhone, rawIdentifier];
+    }
+
+    const staffRes = await db.query(staffQuery, staffParams);
+    if (staffRes.rows.length > 0) {
+      const staffUser = staffRes.rows[0];
+
+      if (!staffUser.password_hash) {
+        const code = generateAndStoreOtp(rawIdentifier, "staff_first_time", {
+          userGuid: staffUser.user_guid,
+          phone: staffUser.phone_number,
+          name: `${staffUser.first_name || ""} ${staffUser.last_name || ""}`.trim()
+        });
+        return res.status(400).json({
+          error: "You have not set up a password yet. Please complete your first-time onboarding setup.",
+          is_first_time: true,
+          dev_pin: code,
+          masked_phone: maskPhone(staffUser.phone_number)
+        });
+      }
+
+      if (!verifyCustomerPassword(password, staffUser.password_hash)) {
+        return res.status(401).json({ error: "Invalid email/phone or password. Please try again." });
+      }
+
+      // Password verified! Generate 6-digit 2FA verification code
+      const code = generateAndStoreOtp(rawIdentifier, "staff_2fa", {
+        userGuid: staffUser.user_guid,
+        phone: staffUser.phone_number,
+        name: `${staffUser.first_name || ""} ${staffUser.last_name || ""}`.trim()
+      });
+
+      return res.json({
+        require_2fa: true,
+        requires_2fa: true,
+        dev_pin: code,
+        user_guid: staffUser.user_guid,
+        source: "users_table",
+        masked_phone: maskPhone(staffUser.phone_number),
+        message: "Password verified! Please enter the 6-digit verification code sent to your phone."
+      });
+    }
+
+    // 2. Check customers table
+    let custQuery, custParams;
+    if (isEmail) {
+      custQuery = `SELECT * FROM customers
+                   WHERE LOWER(email) = LOWER($1)
+                   ORDER BY time_modified DESC NULLS LAST, id DESC LIMIT 1`;
+      custParams = [rawIdentifier];
+    } else {
+      custQuery = `SELECT * FROM customers
+                   WHERE RIGHT(REGEXP_REPLACE(COALESCE(phone_number, ''), '\\D', '', 'g'), 10) = RIGHT($1, 10)
+                      OR REGEXP_REPLACE(COALESCE(phone_number, ''), '\\D', '', 'g') = $1
+                      OR phone_number = $2
+                   ORDER BY time_modified DESC NULLS LAST, id DESC LIMIT 1`;
+      custParams = [dbPhone, rawIdentifier];
+    }
+
+    const custRes = await db.query(custQuery, custParams);
+    if (custRes.rows.length > 0) {
+      const customerRow = custRes.rows[0];
+
+      if (!customerRow.password_hash) {
+        const newHash = hashCustomerPassword(password);
+        await db.query(
+          `UPDATE customers SET password_hash = $1, time_modified = CURRENT_TIMESTAMP WHERE customer_guid = $2`,
+          [newHash, customerRow.customer_guid]
+        );
+      } else if (!verifyCustomerPassword(password, customerRow.password_hash)) {
+        return res.status(401).json({ error: "Invalid email/phone or password. Please try again." });
+      }
+
+      // Password verified! Generate 6-digit 2FA verification code
+      const code = generateAndStoreOtp(rawIdentifier, "customer_2fa", {
+        customerGuid: customerRow.customer_guid,
+        phone: customerRow.phone_number,
+        email: customerRow.email,
+        name: `${customerRow.first_name || ""} ${customerRow.last_name || ""}`.trim()
+      });
+
+      return res.json({
+        require_2fa: true,
+        requires_2fa: true,
+        dev_pin: code,
+        customer_guid: customerRow.customer_guid,
+        user_guid: customerRow.customer_guid,
+        source: "customers",
+        masked_phone: maskPhone(customerRow.phone_number),
+        message: "Password verified! Please enter the 6-digit verification code sent to your phone or email."
+      });
+    }
+
+    return res.status(404).json({ error: "No account found with those details. Please create an account to continue." });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/**
+ * POST /auth/verify-2fa
+ * Validates 6-digit verification code after successful password submission.
+ */
+router.post("/auth/verify-2fa", async function (req, res, next) {
+  try {
+    const rawIdentifier = String(req.body?.identifier || "").trim();
+    const userGuid = String(req.body?.user_guid || "").trim();
+    const customerGuid = String(req.body?.customer_guid || "").trim();
+    const source = String(req.body?.source || "").trim();
+    const otp = String(req.body?.otp || "").trim();
+
+    if (!otp) {
+      return res.status(400).json({ error: "6-digit verification code is required." });
+    }
+
+    if (source === "customers" || customerGuid) {
+      const otpCheck = verifyStoredOtp(rawIdentifier, "customer_2fa", otp);
+      if (!otpCheck.valid) {
+        return res.status(400).json({ error: otpCheck.error });
+      }
+
+      const cRes = await db.query(
+        `SELECT * FROM customers WHERE customer_guid = $1 LIMIT 1`,
+        [customerGuid || userGuid]
+      );
+      if (cRes.rows.length === 0) {
+        return res.status(404).json({ error: "Customer account not found." });
+      }
+
+      const sessionProfile = toCustomerSessionProfile(cRes.rows[0]);
+      userProfiles[sessionProfile.user_guid] = sessionProfile;
+
+      return res.json({
+        success: true,
+        source: "customers",
+        profile: sessionProfile
+      });
+    } else {
+      const otpCheck = verifyStoredOtp(rawIdentifier, "staff_2fa", otp);
+      if (!otpCheck.valid) {
+        return res.status(400).json({ error: otpCheck.error });
+      }
+
+      let query = "SELECT * FROM users_table WHERE user_guid = $1 LIMIT 1";
+      let params = [userGuid];
+      if (!userGuid) {
+        if (rawIdentifier.includes("@")) {
+          query = "SELECT * FROM users_table WHERE LOWER(email) = LOWER($1) LIMIT 1";
+          params = [rawIdentifier];
+        } else {
+          const dbPhone = normalizePhoneDigits(rawIdentifier);
+          query = "SELECT * FROM users_table WHERE REGEXP_REPLACE(COALESCE(phone_number, ''), '\\D', '', 'g') = $1 LIMIT 1";
+          params = [dbPhone];
+        }
+      }
+
+      const staffRes = await db.query(query, params);
+      if (staffRes.rows.length === 0) {
+        return res.status(404).json({ error: "Staff account not found." });
+      }
+
+      const staffUser = staffRes.rows[0];
+      const sessionProfile = toStaffSessionProfile(staffUser);
+      userProfiles[sessionProfile.user_guid] = sessionProfile;
+
+      return res.json({
+        success: true,
+        source: "users_table",
+        profile: sessionProfile
+      });
+    }
+  } catch (err) {
+    return next(err);
+  }
+});
+
+router.post("/auth/customer/verify-2fa", async function (req, res, next) {
+  req.body = { ...req.body, source: "customers" };
+  return router.handle(req, res, next);
+});
+
+/**
+ * POST /auth/staff/login
+ * Staff signs in with identifier + password.
+ * On success, generates and sends a 6-digit PIN for 2FA.
+ */
+router.post("/auth/staff/login", async function (req, res, next) {
+  try {
+    const rawIdentifier = String(req.body?.identifier || "").trim();
+    const password = String(req.body?.password || "");
+
+    if (!rawIdentifier || !password) {
+      return res.status(400).json({ error: "Email or phone number and password are required." });
+    }
+
+    const isEmail = rawIdentifier.includes("@");
+    let query, params;
+    if (isEmail) {
+      query = "SELECT * FROM users_table WHERE LOWER(email) = LOWER($1) LIMIT 1";
+      params = [rawIdentifier];
+    } else {
+      const dbPhone = normalizePhoneDigits(rawIdentifier);
+      query = `SELECT * FROM users_table
+               WHERE REGEXP_REPLACE(COALESCE(phone_number, ''), '\\D', '', 'g') = $1
+                  OR phone_number = $2 LIMIT 1`;
+      params = [dbPhone, rawIdentifier];
+    }
+
+    const result = await db.query(query, params);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: "Staff account not found." });
+    }
+
+    const staffUser = result.rows[0];
+
+    // If staff has no password yet, direct them to setup
+    if (!staffUser.password_hash) {
+      return res.status(400).json({
+        error: "You have not set up a password yet. Please complete your first-time onboarding setup.",
+        is_first_time: true
+      });
+    }
+
+    // Verify password
+    if (!verifyCustomerPassword(password, staffUser.password_hash)) {
+      return res.status(401).json({ error: "Invalid password. Please try again or reset your password." });
+    }
+
+    // Password verified! Requirement: "if user is a staff send 6 digit pin to phone number. remember we still console log our pin since this is under development."
+    const code = generateAndStoreOtp(rawIdentifier, "staff_2fa", {
+      userGuid: staffUser.user_guid,
+      phone: staffUser.phone_number,
+      name: `${staffUser.first_name || ""} ${staffUser.last_name || ""}`.trim()
+    });
+
+    return res.json({
+      require_2fa: true,
+      requires_2fa: true,
+      dev_pin: code,
+      user_guid: staffUser.user_guid,
+      masked_phone: maskPhone(staffUser.phone_number),
+      message: "Password verified! Please enter the 6-digit verification code sent to your phone."
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/**
+ * POST /auth/staff/verify-2fa
+ * Validates 6-digit PIN for staff sign-in 2FA.
+ */
+router.post("/auth/staff/verify-2fa", async function (req, res, next) {
+  try {
+    const rawIdentifier = String(req.body?.identifier || "").trim();
+    const userGuid = String(req.body?.user_guid || "").trim();
+    const otp = String(req.body?.otp || "").trim();
+
+    if (!otp) {
+      return res.status(400).json({ error: "6-digit verification code is required." });
+    }
+
+    const otpCheck = verifyStoredOtp(rawIdentifier, "staff_2fa", otp);
+    if (!otpCheck.valid) {
+      return res.status(400).json({ error: otpCheck.error });
+    }
+
+    let query = "SELECT * FROM users_table WHERE user_guid = $1 LIMIT 1";
+    let params = [userGuid];
+    if (!userGuid) {
+      if (rawIdentifier.includes("@")) {
+        query = "SELECT * FROM users_table WHERE LOWER(email) = LOWER($1) LIMIT 1";
+        params = [rawIdentifier];
+      } else {
+        const dbPhone = normalizePhoneDigits(rawIdentifier);
+        query = "SELECT * FROM users_table WHERE REGEXP_REPLACE(COALESCE(phone_number, ''), '\\D', '', 'g') = $1 LIMIT 1";
+        params = [dbPhone];
+      }
+    }
+
+    const staffRes = await db.query(query, params);
+    if (staffRes.rows.length === 0) {
+      return res.status(404).json({ error: "Staff account not found." });
+    }
+
+    const staffUser = staffRes.rows[0];
+    const sessionProfile = toStaffSessionProfile(staffUser);
+    userProfiles[sessionProfile.user_guid] = sessionProfile;
+
+    return res.json({
+      success: true,
+      profile: sessionProfile
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/**
+ * POST /auth/resend-otp
+ * Resend a new 6-digit PIN for first-time setup, 2FA, or password reset.
+ */
+router.post("/auth/resend-otp", async function (req, res, next) {
+  try {
+    const rawIdentifier = String(req.body?.identifier || "").trim();
+    const purpose = String(req.body?.purpose || "staff_2fa").trim();
+
+    if (!rawIdentifier) {
+      return res.status(400).json({ error: "Identifier is required." });
+    }
+
+    const isEmail = rawIdentifier.includes("@");
+    let phone = "", name = "";
+
+    if (isEmail) {
+      const uRes = await db.query("SELECT * FROM users_table WHERE LOWER(TRIM(email)) = LOWER(TRIM($1)) LIMIT 1", [rawIdentifier]);
+      if (uRes.rows.length > 0) {
+        phone = uRes.rows[0].phone_number;
+        name = `${uRes.rows[0].first_name || ""} ${uRes.rows[0].last_name || ""}`.trim();
+      } else {
+        const cRes = await db.query("SELECT * FROM customers WHERE LOWER(TRIM(email)) = LOWER(TRIM($1)) LIMIT 1", [rawIdentifier]);
+        if (cRes.rows.length > 0) {
+          phone = cRes.rows[0].phone_number;
+          name = `${cRes.rows[0].first_name || ""} ${cRes.rows[0].last_name || ""}`.trim();
+        }
+      }
+    } else {
+      const dbPhone = normalizePhoneDigits(rawIdentifier);
+      const uRes = await db.query(
+        `SELECT * FROM users_table 
+         WHERE RIGHT(REGEXP_REPLACE(COALESCE(phone_number, ''), '\\D', '', 'g'), 10) = RIGHT($1, 10)
+            OR REGEXP_REPLACE(COALESCE(phone_number, ''), '\\D', '', 'g') = $1
+            OR phone_number = $2
+         LIMIT 1`,
+        [dbPhone, rawIdentifier]
+      );
+      if (uRes.rows.length > 0) {
+        phone = uRes.rows[0].phone_number;
+        name = `${uRes.rows[0].first_name || ""} ${uRes.rows[0].last_name || ""}`.trim();
+      } else {
+        const cRes = await db.query(
+          `SELECT * FROM customers 
+           WHERE RIGHT(REGEXP_REPLACE(COALESCE(phone_number, ''), '\\D', '', 'g'), 10) = RIGHT($1, 10)
+              OR REGEXP_REPLACE(COALESCE(phone_number, ''), '\\D', '', 'g') = $1
+              OR phone_number = $2
+           LIMIT 1`,
+          [dbPhone, rawIdentifier]
+        );
+        if (cRes.rows.length > 0) {
+          phone = cRes.rows[0].phone_number;
+          name = `${cRes.rows[0].first_name || ""} ${cRes.rows[0].last_name || ""}`.trim();
+        }
+      }
+    }
+
+    const code = generateAndStoreOtp(rawIdentifier, purpose, { phone, name });
+
+    return res.json({
+      success: true,
+      dev_pin: code,
+      masked_phone: maskPhone(phone || rawIdentifier),
+      message: "A new 6-digit verification code has been dispatched."
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
+
+/**
+ * POST /auth/forgot-password
+ * Initiates password reset by sending a 6-digit PIN to validate account ownership.
+ */
+router.post("/auth/forgot-password", async function (req, res, next) {
+  try {
+    const rawIdentifier = String(req.body?.identifier || "").trim();
+    console.log(`\n🔍 [AUTH FORGOT-PASSWORD] Requested password reset for: "${rawIdentifier}"`);
+
+    if (!rawIdentifier) {
+      return res.status(400).json({ error: "Please enter your email address or phone number." });
+    }
+
+    const isEmail = rawIdentifier.includes("@");
+    let userRow = null;
+    let source = null;
+
+    // Check staff in users_table
+    if (isEmail) {
+      const sRes = await db.query(
+        "SELECT * FROM users_table WHERE LOWER(TRIM(email)) = LOWER(TRIM($1)) LIMIT 1",
+        [rawIdentifier]
+      );
+      if (sRes.rows.length > 0) {
+        userRow = sRes.rows[0];
+        source = "users_table";
+      }
+    } else {
+      const dbPhone = normalizePhoneDigits(rawIdentifier);
+      const sRes = await db.query(
+        `SELECT * FROM users_table 
+         WHERE RIGHT(REGEXP_REPLACE(COALESCE(phone_number, ''), '\\D', '', 'g'), 10) = RIGHT($1, 10)
+            OR REGEXP_REPLACE(COALESCE(phone_number, ''), '\\D', '', 'g') = $1
+            OR phone_number = $2
+         LIMIT 1`,
+        [dbPhone, rawIdentifier]
+      );
+      if (sRes.rows.length > 0) {
+        userRow = sRes.rows[0];
+        source = "users_table";
+      }
+    }
+
+    // Check customers table
+    if (!userRow) {
+      if (isEmail) {
+        const cRes = await db.query(
+          "SELECT * FROM customers WHERE LOWER(TRIM(email)) = LOWER(TRIM($1)) LIMIT 1",
+          [rawIdentifier]
+        );
+        if (cRes.rows.length > 0) {
+          userRow = cRes.rows[0];
+          source = "customers";
+        }
+      } else {
+        const dbPhone = normalizePhoneDigits(rawIdentifier);
+        const cRes = await db.query(
+          `SELECT * FROM customers 
+           WHERE RIGHT(REGEXP_REPLACE(COALESCE(phone_number, ''), '\\D', '', 'g'), 10) = RIGHT($1, 10)
+              OR REGEXP_REPLACE(COALESCE(phone_number, ''), '\\D', '', 'g') = $1
+              OR phone_number = $2
+           LIMIT 1`,
+          [dbPhone, rawIdentifier]
+        );
+        if (cRes.rows.length > 0) {
+          userRow = cRes.rows[0];
+          source = "customers";
+        }
+      }
+    }
+
+    if (!userRow) {
+      console.warn(`⚠️ [AUTH FORGOT-PASSWORD] No account found in users_table or customers for: "${rawIdentifier}"`);
+      return res.status(404).json({ error: "No account found with this email or phone number." });
+    }
+
+    console.log(`✅ [AUTH FORGOT-PASSWORD] Found ${source} account for "${rawIdentifier}" (${userRow.first_name} ${userRow.last_name})`);
+
+    // Generate 6-digit PIN for password reset
+    const code = generateAndStoreOtp(rawIdentifier, "password_reset", {
+      source,
+      userGuid: userRow.user_guid || userRow.customer_guid,
+      phone: userRow.phone_number,
+      name: `${userRow.first_name || ""} ${userRow.last_name || ""}`.trim()
+    });
+
+    return res.json({
+      success: true,
+      source,
+      dev_pin: code,
+      masked_phone: maskPhone(userRow.phone_number),
+      message: "A 6-digit verification code has been sent to your phone/email to verify ownership of your account."
+    });
+  } catch (err) {
+    console.error("❌ [AUTH FORGOT-PASSWORD] Error:", err);
+    return next(err);
+  }
+});
+
+/**
+ * POST /auth/verify-reset-code
+ * Verifies the 6-digit PIN before allowing the user to set a new password.
+ */
+router.post("/auth/verify-reset-code", async function (req, res, next) {
+  try {
+    const rawIdentifier = String(req.body?.identifier || "").trim();
+    const otp = String(req.body?.otp || "").trim();
+
+    if (!rawIdentifier || !otp) {
+      return res.status(400).json({ error: "Identifier and 6-digit verification code are required." });
+    }
+
+    if (otp.length !== 6 || !/^\d{6}$/.test(otp)) {
+      return res.status(400).json({ error: "Please enter a valid 6-digit numeric verification code." });
+    }
+
+    const normalized = normalizeOtpIdentifier(rawIdentifier);
+    const key = `${normalized}:password_reset`;
+    const entry = activeOtps.get(key);
+
+    if (!entry) {
+      return res.status(400).json({
+        error: "No verification code was requested, or the code has expired. Please request a new code."
+      });
+    }
+
+    if (Date.now() > entry.expiresAt) {
+      activeOtps.delete(key);
+      return res.status(400).json({
+        error: "Verification code has expired. Please request a new code."
+      });
+    }
+
+    if (entry.attempts >= 3) {
+      activeOtps.delete(key);
+      return res.status(400).json({
+        error: "Too many failed attempts. Please request a new code."
+      });
+    }
+
+    if (String(entry.code).trim() !== String(otp).trim()) {
+      entry.attempts += 1;
+      const remaining = 3 - entry.attempts;
+      return res.status(400).json({
+        error: `Incorrect verification code. ${remaining} attempt${remaining === 1 ? "" : "s"} remaining.`
+      });
+    }
+
+    // Code matches! Mark as verified and generate a secure reset token
+    const resetToken = crypto.randomBytes(24).toString("hex");
+    entry.verified = true;
+    entry.resetToken = resetToken;
+    entry.verifiedAt = Date.now();
+
+    console.log(`✅ [AUTH VERIFY-RESET-CODE] Identity verified for: "${rawIdentifier}"`);
+
+    return res.json({
+      success: true,
+      reset_token: resetToken,
+      message: "Identity verified successfully. You may now enter your new password."
+    });
+  } catch (err) {
+    console.error("❌ [AUTH VERIFY-RESET-CODE] Error:", err);
+    return next(err);
+  }
+});
+
+/**
+ * POST /auth/reset-password
+ * Completes password reset by validating 6-digit PIN and enforcing strong password.
+ */
+router.post("/auth/reset-password", async function (req, res, next) {
+  try {
+    const rawIdentifier = String(req.body?.identifier || "").trim();
+    const otp = String(req.body?.otp || "").trim();
+    const resetToken = String(req.body?.reset_token || "").trim();
+    const newPassword = String(req.body?.new_password || "");
+
+    if (!rawIdentifier || (!otp && !resetToken) || !newPassword) {
+      return res.status(400).json({ error: "Identifier, verification confirmation, and new password are required." });
+    }
+
+    // 1. Force strong password
+    const pwdCheck = validatePasswordStrength(newPassword);
+    if (!pwdCheck.valid) {
+      return res.status(400).json({
+        error: pwdCheck.errors[0] || "Password does not meet complexity requirements.",
+        details: pwdCheck.errors
+      });
+    }
+
+    // 2. Validate OTP / verification status
+    const normalized = normalizeOtpIdentifier(rawIdentifier);
+    const key = `${normalized}:password_reset`;
+    const entry = activeOtps.get(key);
+
+    let otpValid = false;
+    let otpError = "Verification code has expired or is invalid. Please request a new code.";
+
+    if (entry) {
+      if (Date.now() > entry.expiresAt) {
+        activeOtps.delete(key);
+        otpError = "Verification code has expired. Please request a new code.";
+      } else if (entry.verified && ((resetToken && entry.resetToken === resetToken) || (otp && String(entry.code).trim() === otp))) {
+        otpValid = true;
+      } else {
+        const otpCheck = verifyStoredOtp(rawIdentifier, "password_reset", otp);
+        if (otpCheck.valid) {
+          otpValid = true;
+        } else {
+          otpError = otpCheck.error;
+        }
+      }
+    } else {
+      // Fallback check
+      const otpCheck = verifyStoredOtp(rawIdentifier, "password_reset", otp);
+      if (otpCheck.valid) {
+        otpValid = true;
+      } else {
+        otpError = otpCheck.error;
+      }
+    }
+
+    if (!otpValid) {
+      return res.status(400).json({ error: otpError });
+    }
+
+    // 3. Find account in users_table or customers
+    const isEmail = rawIdentifier.includes("@");
+    let targetType = null; // 'staff' | 'customer'
+    let account = null;
+
+    if (isEmail) {
+      const uRes = await db.query(
+        "SELECT * FROM users_table WHERE LOWER(TRIM(email)) = LOWER(TRIM($1)) LIMIT 1",
+        [rawIdentifier]
+      );
+      if (uRes.rows.length > 0) {
+        targetType = "staff";
+        account = uRes.rows[0];
+      }
+    } else {
+      const dbPhone = normalizePhoneDigits(rawIdentifier);
+      const uRes = await db.query(
+        `SELECT * FROM users_table 
+         WHERE RIGHT(REGEXP_REPLACE(COALESCE(phone_number, ''), '\\D', '', 'g'), 10) = RIGHT($1, 10)
+            OR REGEXP_REPLACE(COALESCE(phone_number, ''), '\\D', '', 'g') = $1
+         LIMIT 1`,
+        [dbPhone]
+      );
+      if (uRes.rows.length > 0) {
+        targetType = "staff";
+        account = uRes.rows[0];
+      }
+    }
+
+    if (!account) {
+      if (isEmail) {
+        const cRes = await db.query(
+          "SELECT * FROM customers WHERE LOWER(TRIM(email)) = LOWER(TRIM($1)) LIMIT 1",
+          [rawIdentifier]
+        );
+        if (cRes.rows.length > 0) {
+          targetType = "customer";
+          account = cRes.rows[0];
+        }
+      } else {
+        const dbPhone = normalizePhoneDigits(rawIdentifier);
+        const cRes = await db.query(
+          `SELECT * FROM customers 
+           WHERE RIGHT(REGEXP_REPLACE(COALESCE(phone_number, ''), '\\D', '', 'g'), 10) = RIGHT($1, 10)
+              OR REGEXP_REPLACE(COALESCE(phone_number, ''), '\\D', '', 'g') = $1
+           LIMIT 1`,
+          [dbPhone]
+        );
+        if (cRes.rows.length > 0) {
+          targetType = "customer";
+          account = cRes.rows[0];
+        }
+      }
+    }
+
+    if (!account) {
+      return res.status(404).json({ error: "Account could not be found to reset password." });
+    }
+
+    // 4. RESTRICT USER FROM REUSING LAST PASSWORD
+    const isReusingCurrent = account.password_hash && verifyCustomerPassword(newPassword, account.password_hash);
+    const isReusingPrevious = account.last_password_hash && verifyCustomerPassword(newPassword, account.last_password_hash);
+
+    if (isReusingCurrent || isReusingPrevious) {
+      return res.status(400).json({
+        error: "You cannot reuse your last password. Please choose a different password."
+      });
+    }
+
+    // 5. Update password hash and preserve previous password in last_password_hash
+    const newHash = hashCustomerPassword(newPassword);
+    const prevHash = account.password_hash || null;
+
+    let sessionProfile;
+
+    if (targetType === "staff") {
+      const uRes = await db.query(
+        `UPDATE users_table SET password_hash = $1, last_password_hash = $2 WHERE user_guid = $3 RETURNING *`,
+        [newHash, prevHash, account.user_guid]
+      );
+      const updatedStaff = uRes.rows[0] || account;
+      sessionProfile = toStaffSessionProfile(updatedStaff);
+    } else {
+      const cRes = await db.query(
+        `UPDATE customers SET password_hash = $1, last_password_hash = $2, time_modified = CURRENT_TIMESTAMP WHERE customer_guid = $3 RETURNING *`,
+        [newHash, prevHash, account.customer_guid]
+      );
+      const updatedCust = cRes.rows[0] || account;
+      sessionProfile = toCustomerSessionProfile(updatedCust);
+    }
+
+    // Register active session profile so user is immediately signed in
+    userProfiles[sessionProfile.user_guid] = sessionProfile;
+
+    // 6. Record password reset in supervisor_audit_logs
+    try {
+      const logGuid = `audit_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+      const logBusiness = String(account.business || (targetType === "customer" ? "customers" : "all")).trim();
+      const entityRole = targetType === "customer" 
+        ? "Customer" 
+        : (account.permission_group || "Staff");
+      const entityGuid = targetType === "customer" ? account.customer_guid : account.user_guid;
+      const actorIdentifier = account.email || account.phone_number || entityGuid;
+      const actorName = `${account.first_name || ""} ${account.last_name || ""}`.trim() || actorIdentifier;
+
+      const reason = `Password reset via 6-digit verification code by ${actorName} (${entityRole})`;
+      const beforeState = {
+        role: entityRole,
+        account_type: targetType,
+        has_previous_password: Boolean(prevHash),
+        email: account.email || null,
+        phone_number: account.phone_number || null,
+      };
+      const afterState = {
+        role: entityRole,
+        account_type: targetType,
+        status: "password_reset_successful",
+        reset_method: resetToken ? "verified_reset_token" : "verified_otp",
+        email: account.email || null,
+        phone_number: account.phone_number || null,
+      };
+
+      await db.query(
+        `INSERT INTO supervisor_audit_logs 
+          (log_guid, business, actor_guid, action, entity_type, entity_guid, reason, before_state, after_state, time_created)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CURRENT_TIMESTAMP)`,
+        [
+          logGuid,
+          logBusiness,
+          actorIdentifier,
+          "PASSWORD_RESET",
+          entityRole,
+          entityGuid,
+          reason,
+          JSON.stringify(beforeState),
+          JSON.stringify(afterState),
+        ]
+      );
+    } catch (auditErr) {
+      console.error("⚠️ Failed to record password reset in supervisor_audit_logs:", auditErr.message);
+    }
+
+    // Clear active OTP / resetToken session after successful reset
+    activeOtps.delete(key);
+
+    return res.json({
+      success: true,
+      message: "Your password has been successfully reset! You are now signed in.",
+      profile: sessionProfile
     });
   } catch (err) {
     return next(err);
@@ -671,10 +1809,12 @@ router.post("/auth/customer/signup", async function (req, res, next) {
         .status(400)
         .json({ error: "Please enter a valid 10-digit phone number." });
     }
-    if (password.length < 4) {
-      return res
-        .status(400)
-        .json({ error: "Password must be at least 4 characters." });
+    const pwdCheck = validatePasswordStrength(password);
+    if (!pwdCheck.valid) {
+      return res.status(400).json({
+        error: pwdCheck.errors[0] || "Password does not meet complexity requirements.",
+        details: pwdCheck.errors
+      });
     }
 
     const passwordHash = hashCustomerPassword(password);

@@ -3,8 +3,8 @@ import axios from 'axios';
 import { BASE_URL } from '../../shared/Utils/apiConfig';
 import { useRefresh } from './RefreshContext';
 
-export const ELEVATED_PERMISSION_GROUPS = ['admin', 'supervisor', 'agent'] as const;
-export type EffectiveRole = 'Admin' | 'Supervisor' | 'Agent' | 'Customer';
+export const ELEVATED_PERMISSION_GROUPS = ['admin', 'business_owner', 'supervisor', 'agent'] as const;
+export type EffectiveRole = 'Admin' | 'Business_Owner' | 'Supervisor' | 'Agent' | 'Customer';
 
 export interface CustomerPrefill {
   first_name: string;
@@ -40,7 +40,9 @@ interface UserProfileContextType {
   isTV: boolean;
   /** True if profile.permission_group === 'Admin' or profile.is_admin === true */
   isAdmin: boolean;
-  /** True if profile.permission_group === 'Supervisor' */
+  /** True if profile.permission_group === 'Business_Owner' or 'Supervisor' */
+  isBusinessOwner: boolean;
+  /** True if profile.permission_group === 'Supervisor' or 'Business_Owner' (alias) */
   isSupervisor: boolean;
   /** True if profile.permission_group === 'Agent' */
   isAgent: boolean;
@@ -367,43 +369,48 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   // Role classification:
   // - isAdmin: profile.permission_group === 'Admin' or profile.is_admin === true
-  // - isSupervisor: profile.permission_group === 'Supervisor'
+  // - isBusinessOwner: profile.permission_group === 'Business_Owner' or 'Supervisor'
+  // - isSupervisor: alias for isBusinessOwner
   // - isAgent: profile.permission_group === 'Agent'
-  // - isCustomer: not Admin, Supervisor, or Agent (or unauthenticated)
+  // - isCustomer: not Admin, Business_Owner, Supervisor, or Agent (or unauthenticated)
   const isAdmin = useMemo(() => {
     if (!profile) return false;
     return profile.permission_group === 'Admin' || profile.is_admin === true;
   }, [profile]);
 
-  const isSupervisor = useMemo(() => {
+  const isBusinessOwner = useMemo(() => {
     if (!profile) return false;
-    return profile.permission_group === 'Supervisor';
+    const pg = String(profile.permission_group || '').toLowerCase();
+    return pg === 'business_owner' || pg === 'supervisor';
   }, [profile]);
+
+  const isSupervisor = isBusinessOwner;
 
   const isAgent = useMemo(() => {
     if (!profile) return false;
     return profile.permission_group === 'Agent';
   }, [profile]);
 
-  const isElevatedStaff = isAdmin || isSupervisor || isAgent;
+  const isElevatedStaff = isAdmin || isBusinessOwner || isAgent;
   const isCustomer = !isElevatedStaff;
 
   const effectiveRole: EffectiveRole = useMemo(() => {
     if (isAdmin) return 'Admin';
-    if (isSupervisor) return 'Supervisor';
+    if (isBusinessOwner) return 'Business_Owner';
     if (isAgent) return 'Agent';
     return 'Customer';
-  }, [isAdmin, isSupervisor, isAgent]);
+  }, [isAdmin, isBusinessOwner, isAgent]);
 
   const canAccessSupervisorPanel = useCallback(
     (targetBusiness?: string | null): boolean => {
       if (!isElevatedStaff) return false;
+      if (isAdmin) return true;
       const assigned = String(profile?.business || '').trim().toLowerCase();
       if (!assigned) return false;
       if (!targetBusiness) return true;
       return assigned === String(targetBusiness).trim().toLowerCase();
     },
-    [isElevatedStaff, profile?.business]
+    [isElevatedStaff, isAdmin, profile?.business]
   );
 
   const customerPrefill: CustomerPrefill | null = useMemo(() => {
@@ -425,6 +432,7 @@ export const UserProfileProvider: React.FC<{ children: ReactNode }> = ({ childre
       isLinkedDevice,
       isTV,
       isAdmin,
+      isBusinessOwner,
       isSupervisor,
       isAgent,
       isElevatedStaff,

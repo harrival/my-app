@@ -1,7 +1,7 @@
 import React, { useState, useContext } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import maze from '../assets/maze.jpeg';
-import appLogo from '../assets/38.jpg';
+import appLogo from '../assets/tgg.png';
 import classes from './Header.module.scss';
 import SideDrawer from './SideDrawer';
 import { AuthContext } from '../shared/Context/auth-context';
@@ -23,6 +23,7 @@ const Header: React.FC<HeaderProps> = (props) => {
         isLinkedDevice,
         isTV,
         isAdmin,
+        isBusinessOwner,
         isSupervisor,
         isAgent: isAgentRole,
         isElevatedStaff
@@ -31,7 +32,7 @@ const Header: React.FC<HeaderProps> = (props) => {
 
     const business = profile?.business || "alpha_rentals";
     const isAgent = !isTV && (isAgentRole || Boolean(profile?.rep_id));
-    const isAdminOrSupervisor = !isTV && (isAdmin || isSupervisor);
+    const isAdminOrSupervisor = !isTV && (isAdmin || isBusinessOwner || isSupervisor);
 
     const logoutHandler = async () => {
         try {
@@ -75,6 +76,53 @@ const Header: React.FC<HeaderProps> = (props) => {
         closeDrawerHandler();
     };
 
+    const location = useLocation();
+    const pathname = location.pathname;
+    const search = location.search;
+
+    const isLinkActive = (targetKey: string): boolean => {
+        const lowerPath = pathname.toLowerCase();
+        const hasResParam = search.includes('reservations=1');
+
+        switch (targetKey) {
+            case 'home':
+                return (
+                    (lowerPath === '/' || lowerPath === '/home' || lowerPath.endsWith('/home')) &&
+                    !hasResParam
+                );
+            case 'reservations':
+                return (
+                    hasResParam ||
+                    lowerPath.startsWith('/book/') ||
+                    lowerPath.includes('/reservations')
+                );
+            case 'playground':
+                return (
+                    lowerPath.includes('/playerbuilder') ||
+                    (Boolean(business) && lowerPath === `/${business.toLowerCase()}` && !isAdminOrSupervisor)
+                );
+            case 'scanner':
+                return lowerPath.includes('/playerscanner');
+            case 'monitor':
+                return lowerPath.includes('/playersmonitor');
+            case 'business_manager':
+                return (
+                    lowerPath.includes('/businessmanager') ||
+                    lowerPath.includes('/configuration') ||
+                    lowerPath.includes('/businessinfo') ||
+                    (Boolean(business) && lowerPath === `/${business.toLowerCase()}` && isAdminOrSupervisor)
+                );
+            case 'admin':
+                return lowerPath.startsWith('/admin') || lowerPath.includes('/supervisorpanel');
+            case 'profile':
+                return lowerPath.includes('/profile');
+            case 'auth':
+                return lowerPath.includes('/auth');
+            default:
+                return false;
+        }
+    };
+
     const navLinks = (
         <div className={classes.navLinks}>
             {auth.isLoggedIn ? (
@@ -82,7 +130,7 @@ const Header: React.FC<HeaderProps> = (props) => {
                     {isTV ? (
                         <NavLink
                             to={`/${business}/PlayersMonitor`}
-                            className={classes.link}
+                            className={`${classes.link} ${isLinkActive('monitor') ? classes.linkActive : ''}`}
                             onClick={handleNavClick}
                         >
                             Monitor
@@ -91,7 +139,7 @@ const Header: React.FC<HeaderProps> = (props) => {
                         <>
                             <NavLink
                                 to="/"
-                                className={classes.link}
+                                className={`${classes.link} ${isLinkActive('home') ? classes.linkActive : ''}`}
                                 onClick={handleNavClick}
                             >
                                 Home
@@ -100,7 +148,7 @@ const Header: React.FC<HeaderProps> = (props) => {
                             {isElevatedStaff && (
                                 <NavLink
                                     to={`/${business}/PlayerBuilder`}
-                                    className={classes.link}
+                                    className={`${classes.link} ${isLinkActive('playground') ? classes.linkActive : ''}`}
                                     onClick={handleNavClick}
                                 >
                                     Play Ground
@@ -110,7 +158,7 @@ const Header: React.FC<HeaderProps> = (props) => {
                             {isAgent && (
                                 <NavLink
                                     to={`/${business}/PlayerScanner`}
-                                    className={classes.link}
+                                    className={`${classes.link} ${isLinkActive('scanner') ? classes.linkActive : ''}`}
                                     onClick={handleNavClick}
                                 >
                                     Scan Player
@@ -120,7 +168,7 @@ const Header: React.FC<HeaderProps> = (props) => {
                             {isAgent && (
                                 <NavLink
                                     to={`/${business}/PlayersMonitor`}
-                                    className={classes.link}
+                                    className={`${classes.link} ${isLinkActive('monitor') ? classes.linkActive : ''}`}
                                     onClick={handleNavClick}
                                 >
                                     Monitor
@@ -130,7 +178,7 @@ const Header: React.FC<HeaderProps> = (props) => {
                             {isAdminOrSupervisor && (
                                 <NavLink
                                     to={`/${business}/BusinessManager`}
-                                    className={classes.link}
+                                    className={`${classes.link} ${isLinkActive('business_manager') ? classes.linkActive : ''}`}
                                     onClick={handleNavClick}
                                 >
                                     Business Manager
@@ -139,17 +187,17 @@ const Header: React.FC<HeaderProps> = (props) => {
 
                             {isElevatedStaff && (
                                 <NavLink
-                                    to={`/admin/${business}`}
-                                    className={classes.link}
+                                    to={isAdmin ? '/admin' : `/admin/${business}`}
+                                    className={`${classes.link} ${isLinkActive('admin') ? classes.linkActive : ''}`}
                                     onClick={handleNavClick}
                                 >
-                                    Supervisor Panel
+                                    {isAdmin ? 'Admin Panel' : 'Business Owner Panel'}
                                 </NavLink>
                             )}
 
                             <NavLink
                                 to="/?reservations=1"
-                                className={classes.link}
+                                className={`${classes.link} ${isLinkActive('reservations') ? classes.linkActive : ''}`}
                                 onClick={handleNavClick}
                             >
                                 Reservations
@@ -161,14 +209,14 @@ const Header: React.FC<HeaderProps> = (props) => {
                 <>
                     <NavLink
                         to="/"
-                        className={classes.link}
+                        className={`${classes.link} ${isLinkActive('home') ? classes.linkActive : ''}`}
                         onClick={handleNavClick}
                     >
                         Home
                     </NavLink>
                     <NavLink
                         to="/?reservations=1"
-                        className={classes.link}
+                        className={`${classes.link} ${isLinkActive('reservations') ? classes.linkActive : ''}`}
                         onClick={handleNavClick}
                     >
                         Reservations
@@ -212,13 +260,14 @@ const Header: React.FC<HeaderProps> = (props) => {
                                     {!auth.isLoggedIn ? (
                                         <NavLink
                                             to="/Auth"
-                                            className={classes.link}
+                                            className={`${classes.link} ${isLinkActive('auth') ? classes.linkActive : ''}`}
                                             onClick={handleNavClick}
                                             style={{
                                                 display: 'block',
                                                 padding: '10px 14px',
-                                                backgroundColor: '#ffffff',
-                                                color: '#174b0f',
+                                                backgroundColor: isLinkActive('auth') ? 'rgba(255, 255, 255, 0.26)' : '#ffffff',
+                                                color: isLinkActive('auth') ? '#ffffff' : '#174b0f',
+                                                border: isLinkActive('auth') ? '2px solid #a3e635' : '1px solid transparent',
                                                 borderRadius: '8px',
                                                 textAlign: 'center',
                                                 fontWeight: 'bold',
@@ -255,13 +304,14 @@ const Header: React.FC<HeaderProps> = (props) => {
                                                 <NavLink
                                                     to={`/${business}/Profile`}
                                                     onClick={handleNavClick}
+                                                    className={`${classes.link} ${isLinkActive('profile') ? classes.linkActive : ''}`}
                                                     style={{
                                                         padding: '10px 14px',
                                                         borderRadius: '8px',
-                                                        backgroundColor: 'rgba(255, 255, 255, 0.12)',
-                                                        border: '1px solid rgba(255, 255, 255, 0.25)',
+                                                        backgroundColor: isLinkActive('profile') ? 'rgba(255, 255, 255, 0.26)' : 'rgba(255, 255, 255, 0.12)',
+                                                        border: isLinkActive('profile') ? '2px solid #a3e635' : '1px solid rgba(255, 255, 255, 0.25)',
                                                         color: '#ffffff',
-                                                        fontWeight: '600',
+                                                        fontWeight: isLinkActive('profile') ? '700' : '600',
                                                         textDecoration: 'none',
                                                         fontSize: '0.9rem',
                                                         textAlign: 'center',
@@ -321,7 +371,11 @@ const Header: React.FC<HeaderProps> = (props) => {
                 {/* Desktop logged in buttons */}
                 <div className={classes.loggedInButtons}>
                     {!auth.isLoggedIn ? (
-                        <NavLink to="/Auth" className={classes.link} style={{ fontWeight: 'bold', textDecoration: 'none' }}>
+                        <NavLink
+                            to="/Auth"
+                            className={`${classes.link} ${isLinkActive('auth') ? classes.linkActive : ''}`}
+                            style={{ fontWeight: 'bold', textDecoration: 'none' }}
+                        >
                             Sign in
                         </NavLink>
                     ) : (
@@ -337,7 +391,11 @@ const Header: React.FC<HeaderProps> = (props) => {
                                 </span>
                             )}
                             {!isTV && (
-                                <NavLink to={`/${business}/Profile`} className={classes.link} style={{ marginRight: '15px', fontWeight: 'bold', textDecoration: 'none' }}>
+                                <NavLink
+                                    to={`/${business}/Profile`}
+                                    className={`${classes.link} ${isLinkActive('profile') ? classes.linkActive : ''}`}
+                                    style={{ marginRight: '15px', fontWeight: 'bold', textDecoration: 'none' }}
+                                >
                                     Profile
                                 </NavLink>
                             )}

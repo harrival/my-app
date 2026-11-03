@@ -48,8 +48,8 @@ const AddEventForm: React.FC<AddEventFormProps> = ({ onClose, onSuccess }) => {
         e.preventDefault();
 
         const newErrors: Record<string, string> = {};
-        if (!formData.event_type) newErrors.event_type = "Event type is required";
-        if (!formData.event_location) newErrors.event_location = "Location is required";
+        if (!formData.event_type.trim()) newErrors.event_type = "Event type is required";
+        if (!formData.event_location.trim()) newErrors.event_location = "Location is required";
 
         if (!isLongTermEvent) {
             if (!formData.event_first_date) newErrors.event_first_date = "Start date is required";
@@ -65,11 +65,13 @@ const AddEventForm: React.FC<AddEventFormProps> = ({ onClose, onSuccess }) => {
         if (Object.keys(newErrors).length > 0) return;
 
         try {
-            const response = await axios.post(`${BASE_URL}/addToTable`, {
+            await axios.post(`${BASE_URL}/addToTable`, {
                 tableName: 'events_table',
                 fields: {
                     event_guid: crypto.randomUUID(), // Generate a new GUID
                     ...formData,
+                    event_type: formData.event_type.trim(),
+                    event_location: formData.event_location.trim(),
                     event_first_date: isLongTermEvent ? null : formData.event_first_date,
                     event_last_date: isLongTermEvent ? null : formData.event_last_date,
                     time_created: new Date().toISOString(),
@@ -77,6 +79,18 @@ const AddEventForm: React.FC<AddEventFormProps> = ({ onClose, onSuccess }) => {
                 }
             });
 
+            // Clear the form on success
+            setFormData({
+                event_type: '',
+                event_location: '',
+                event_first_date: '',
+                event_last_date: '',
+                event_type_created_by: profile?.user_guid || '',
+                is_active: true,
+                business: profile?.business || profile?.business_value || '',
+            });
+            setIsLongTermEvent(false);
+            setErrors({});
             onSuccess();
             onClose();
         } catch (error) {
@@ -96,6 +110,7 @@ const AddEventForm: React.FC<AddEventFormProps> = ({ onClose, onSuccess }) => {
                             type="text"
                             id="event_type"
                             name="event_type"
+                            placeholder="e.g. Corporate Retreat, Summer Festival"
                             className={classes.formInput}
                             value={formData.event_type}
                             onChange={handleChange}
@@ -109,6 +124,7 @@ const AddEventForm: React.FC<AddEventFormProps> = ({ onClose, onSuccess }) => {
                             type="text"
                             id="event_location"
                             name="event_location"
+                            placeholder="e.g. Main Auditorium, Downtown Center"
                             className={classes.formInput}
                             value={formData.event_location}
                             onChange={handleChange}

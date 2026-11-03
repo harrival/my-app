@@ -53,24 +53,27 @@ function extractSubdomainBusiness(hostname) {
 /**
  * Classify user role:
  * - isAdmin: permission_group === 'Admin' or is_admin === true
- * - isSupervisor: permission_group === 'Supervisor'
+ * - isBusinessOwner: permission_group === 'Business_Owner' (or 'Supervisor')
+ * - isSupervisor: alias for isBusinessOwner
  * - isAgent: permission_group === 'Agent'
- * - isCustomer: not Admin, Supervisor, or Agent
+ * - isCustomer: not Admin, Business_Owner, Supervisor, or Agent
  */
 function classifyRole(permissionGroup, isAdminFlag) {
-  const isAdmin =
-    permissionGroup === "Admin" || Boolean(isAdminFlag);
-  const isSupervisor = permissionGroup === "Supervisor";
-  const isAgent = permissionGroup === "Agent";
-  const isElevated = isAdmin || isSupervisor || isAgent;
+  const norm = String(permissionGroup || "").trim().toLowerCase();
+  const isAdmin = norm === "admin" || Boolean(isAdminFlag);
+  const isBusinessOwner = norm === "business_owner" || norm === "supervisor";
+  const isSupervisor = isBusinessOwner;
+  const isAgent = norm === "agent";
+  const isElevated = isAdmin || isBusinessOwner || isAgent;
 
   let effectiveRole = "Customer";
   if (isAdmin) effectiveRole = "Admin";
-  else if (isSupervisor) effectiveRole = "Supervisor";
+  else if (isBusinessOwner) effectiveRole = "Business_Owner";
   else if (isAgent) effectiveRole = "Agent";
 
   return {
     isAdmin,
+    isBusinessOwner,
     isSupervisor,
     isAgent,
     isElevated,
@@ -111,12 +114,6 @@ async function requireSupervisor(req, res, next) {
     const targetBusiness = normalizeBusiness(
       req.params?.business || req.business || req.query?.business || req.body?.business
     );
-
-    if (!targetBusiness) {
-      throw new ExpressError("Target business tenant is required", 400);
-    }
-
-    req.business = targetBusiness;
 
     const userGuid =
       req.headers["x-user-guid"] ||
@@ -160,7 +157,7 @@ async function requireSupervisor(req, res, next) {
       throw new ExpressError("Authentication required to access supervisor resources", 401);
     }
 
-    const { isElevated } = classifyRole(
+    const { isAdmin, isElevated } = classifyRole(
       resolvedProfile.permission_group,
       resolvedProfile.is_admin
     );
@@ -172,12 +169,28 @@ async function requireSupervisor(req, res, next) {
       );
     }
 
+    if (!targetBusiness && !isAdmin) {
+      throw new ExpressError("Target business tenant is required", 400);
+    }
+
+    req.business = targetBusiness || "all";
+
     const actorBusiness = normalizeBusiness(resolvedProfile.business || headerBusiness);
-    if (!actorBusiness || actorBusiness.toLowerCase() !== targetBusiness.toLowerCase()) {
-      throw new ExpressError(
-        `Forbidden: Cross-tenant access denied for business '${targetBusiness}'`,
-        403
-      );
+    // Admin user does not own a business and can access any tenant or view all.
+    // Non-admin users are strictly forbidden from cross-tenant access and from 'all'.
+    if (!isAdmin) {
+      if (targetBusiness && targetBusiness.toLowerCase() === "all") {
+        throw new ExpressError(
+          "Forbidden: Only Admin users can view all business tenants",
+          403
+        );
+      }
+      if (!actorBusiness || (targetBusiness && actorBusiness.toLowerCase() !== targetBusiness.toLowerCase())) {
+        throw new ExpressError(
+          `Forbidden: Cross-tenant access denied for business '${targetBusiness}'`,
+          403
+        );
+      }
     }
 
     req.actor = {
@@ -264,7 +277,7 @@ async function resolveSessionIdentity(req, res, next) {
           }
         : null);
 
-    const { isElevated, isCustomer, effectiveRole } = classifyRole(
+    const { isAdmin, isElevated, isCustomer, effectiveRole } = classifyRole(
       activeProfile?.permission_group,
       activeProfile?.is_admin
     );
@@ -272,10 +285,11 @@ async function resolveSessionIdentity(req, res, next) {
     const targetBusiness = normalizeBusiness(req.params?.business || req.business);
     const assignedBusiness = normalizeBusiness(activeProfile?.business);
     const isSupervisorForTenant = Boolean(
-      isElevated &&
+      isAdmin ||
+      (isElevated &&
         assignedBusiness &&
         targetBusiness &&
-        assignedBusiness.toLowerCase() === targetBusiness.toLowerCase()
+        assignedBusiness.toLowerCase() === targetBusiness.toLowerCase())
     );
 
     req.identity = {
@@ -288,6 +302,7 @@ async function resolveSessionIdentity(req, res, next) {
       is_customer: isCustomer,
       classified_as: isCustomer ? "Customer" : "Staff",
       effective_role: effectiveRole,
+      is_business_owner_for_tenant: isSupervisorForTenant,
       is_supervisor_for_tenant: isSupervisorForTenant,
       customer_prefill:
         activeProfile && isCustomer

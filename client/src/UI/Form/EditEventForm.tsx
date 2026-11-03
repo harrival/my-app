@@ -67,7 +67,8 @@ const EditEventForm: React.FC<EditEventFormProps> = ({ event, onClose, onSuccess
         e.preventDefault();
 
         const newErrors: Record<string, string> = {};
-        if (!formData.event_type) newErrors.event_type = "Event type is required";
+        if (!formData.event_type?.trim()) newErrors.event_type = "Event type is required";
+        if (!formData.event_location?.trim()) newErrors.event_location = "Location is required";
         if (!formData.event_type_created_by) newErrors.event_type_created_by = "Creator selection is required";
 
         if (!isLongTermEvent) {
@@ -111,6 +112,7 @@ const EditEventForm: React.FC<EditEventFormProps> = ({ event, onClose, onSuccess
                             type="text"
                             id="event_type"
                             name="event_type"
+                            placeholder="e.g. Corporate Retreat, Summer Festival"
                             className={classes.formInput}
                             value={formData.event_type}
                             onChange={handleChange}
@@ -124,11 +126,13 @@ const EditEventForm: React.FC<EditEventFormProps> = ({ event, onClose, onSuccess
                             type="text"
                             id="event_location"
                             name="event_location"
+                            placeholder="e.g. Main Auditorium, Downtown Center"
                             className={classes.formInput}
                             value={formData.event_location}
                             onChange={handleChange}
                             required
                         />
+                        {errors.event_location && <p className={classes.errorText}>{errors.event_location}</p>}
                     </div>
                     <div className={classes.checkboxGroup} style={{ marginBottom: '1rem' }}>
                         <label htmlFor="isLongTermEvent" className={classes.formLabel}>Is long term event?</label>

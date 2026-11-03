@@ -450,6 +450,16 @@ async function ensureBusinessSettingsInitialized(business) {
  */
 async function ensureBusinessTemplatesInitialized(business) {
   if (!business) return;
+
+  // Clean up any legacy template rows not recognized by the standard notification specifications
+  const validEventTypes = DEFAULT_TEMPLATES.map((t) => t.event_type);
+  await db.query(
+    `DELETE FROM business_templates
+     WHERE LOWER(business) = LOWER($1)
+       AND event_type NOT IN (${validEventTypes.map((_, i) => `$${i + 2}`).join(", ")})`,
+    [business, ...validEventTypes]
+  );
+
   const existingRes = await db.query(
     `SELECT event_type, channel FROM business_templates WHERE LOWER(business) = LOWER($1)`,
     [business]
@@ -481,16 +491,28 @@ async function ensureBusinessTemplatesInitialized(business) {
 }
 
 /**
- * Load all dynamic settings for a specific business tenant from `business_settings`.
+ * Load all dynamic settings for a specific business tenant from `business_settings`
+ * merged with core business profile fields from `business_table`.
  */
 async function getBusinessSettings(business) {
   const fallbacks = buildFallbackSettings(business);
   if (!business) {
-    return { settings: fallbacks, time_modified: null };
+    return { settings: fallbacks, time_modified: null, has_settings: false };
   }
 
-  await ensureBusinessSettingsInitialized(business);
+  // 1. Check business_table for core business profile (address, phone, email, timezone, currency)
+  let bizRow = null;
+  try {
+    const bizRes = await db.query(
+      `SELECT * FROM business_table WHERE LOWER(business) = LOWER($1) LIMIT 1`,
+      [business]
+    );
+    bizRow = bizRes.rows[0] || null;
+  } catch (err) {
+    // If business_table doesn't exist yet or fails, proceed safely
+  }
 
+  // 2. Check business_settings table for dynamic settings & policies
   const result = await db.query(
     `SELECT setting_key, setting_value, time_modified
      FROM business_settings
@@ -498,8 +520,34 @@ async function getBusinessSettings(business) {
     [business]
   );
 
+  const hasPersistedSettings = result.rows.length > 0;
+  const hasBusinessProfile = Boolean(
+    bizRow &&
+    (bizRow.physical_address || bizRow.contact_email || bizRow.contact_phone || bizRow.business_name)
+  );
+
+  const hasSettings = hasPersistedSettings || hasBusinessProfile;
+  if (!hasSettings) {
+    return {
+      settings: fallbacks,
+      persisted_settings: {},
+      has_settings: false,
+      time_modified: null,
+    };
+  }
+
   const merged = { ...fallbacks };
-  let latestModified = null;
+  let latestModified = bizRow?.time_modified || null;
+
+  // Populate from business_table if present
+  if (bizRow) {
+    if (bizRow.business_name) merged.business_name = bizRow.business_name;
+    if (bizRow.contact_email) merged.contact_email = bizRow.contact_email;
+    if (bizRow.contact_phone) merged.contact_phone = bizRow.contact_phone;
+    if (bizRow.physical_address) merged.physical_address = bizRow.physical_address;
+    if (bizRow.timezone) merged.timezone = bizRow.timezone;
+    if (bizRow.currency) merged.currency = bizRow.currency;
+  }
 
   for (const row of result.rows) {
     const key = row.setting_key;
@@ -519,6 +567,8 @@ async function getBusinessSettings(business) {
 
   return {
     settings: merged,
+    persisted_settings: merged,
+    has_settings: true,
     time_modified: latestModified,
   };
 }
@@ -527,7 +577,7 @@ async function getBusinessSettings(business) {
  * Return the structured catalog definition paired with the tenant's current database values.
  */
 async function getBusinessSettingsCatalogWithValues(business) {
-  const { settings, time_modified } = await getBusinessSettings(business);
+  const { settings, time_modified, has_settings } = await getBusinessSettings(business);
   const catalog = DYNAMIC_SETTINGS_CATALOG.map((item) => ({
     category: item.category,
     key: item.key,
@@ -536,14 +586,15 @@ async function getBusinessSettingsCatalogWithValues(business) {
     max: item.max,
     description: item.description,
     default_fallback: item.defaultFallback(business),
-    current_value: settings[item.key],
+    current_value: has_settings ? settings[item.key] : null,
   }));
 
   return {
     business,
     catalog,
-    settings,
+    settings: has_settings ? settings : {},
     time_modified,
+    has_settings,
   };
 }
 
@@ -551,15 +602,15 @@ async function getBusinessSettingsCatalogWithValues(business) {
  * Return the public-facing tenant configuration for `/api/:business/config`.
  */
 async function getPublicBusinessConfig(business) {
-  const { settings, time_modified } = await getBusinessSettings(business);
+  const { settings, time_modified, has_settings } = await getBusinessSettings(business);
   return {
     business,
-    business_name: settings.business_name,
-    contact_email: settings.contact_email,
-    contact_phone: settings.contact_phone,
-    physical_address: settings.physical_address,
-    timezone: settings.timezone,
-    currency: settings.currency,
+    business_name: settings.business_name || (has_settings ? "" : ""),
+    contact_email: has_settings ? (settings.contact_email || "") : "",
+    contact_phone: has_settings ? (settings.contact_phone || "") : "",
+    physical_address: has_settings ? (settings.physical_address || "") : "",
+    timezone: settings.timezone || "America/Los_Angeles",
+    currency: settings.currency || "USD",
     policies: {
       hold_ttl_seconds: Number(settings.hold_ttl_seconds),
       free_change_cutoff_hours: Number(settings.free_change_cutoff_hours),
@@ -619,6 +670,31 @@ async function updateBusinessSettings(
       );
     }
 
+    try {
+      await client.query(
+        `UPDATE business_table SET
+           business_name = COALESCE($1, business_name),
+           contact_email = COALESCE($2, contact_email),
+           contact_phone = COALESCE($3, contact_phone),
+           physical_address = COALESCE($4, physical_address),
+           timezone = COALESCE($5, timezone),
+           currency = COALESCE($6, currency),
+           time_modified = CURRENT_TIMESTAMP
+         WHERE LOWER(business) = LOWER($7)`,
+        [
+          normalizedUpdates.business_name || null,
+          normalizedUpdates.contact_email || null,
+          normalizedUpdates.contact_phone || null,
+          normalizedUpdates.physical_address || null,
+          normalizedUpdates.timezone || null,
+          normalizedUpdates.currency || null,
+          business,
+        ]
+      );
+    } catch (bizTableErr) {
+      // Non-fatal if business_table does not exist or doesn't have row
+    }
+
     const afterResult = await client.query(
       `SELECT setting_key, setting_value, time_modified
        FROM business_settings
@@ -674,6 +750,28 @@ async function updateBusinessSettings(
  * Retrieve notification templates for a business from `business_templates`.
  */
 async function getBusinessTemplates(business, eventFilter = null) {
+  const isAll = String(business || "").toLowerCase() === "all";
+  if (isAll) {
+    const { listAllBusinesses } = require("./businessService");
+    const allBiz = await listAllBusinesses();
+    for (const b of allBiz) {
+      await ensureBusinessTemplatesInitialized(b.business);
+    }
+    let query = `SELECT * FROM business_templates`;
+    const params = [];
+    if (eventFilter) {
+      params.push(eventFilter);
+      query += ` WHERE event_type = $1`;
+    }
+    query += ` ORDER BY business ASC, event_type ASC, channel ASC`;
+
+    const result = await db.query(query, params);
+    return result.rows.map((row) => ({
+      ...row,
+      available_tokens: TEMPLATE_TOKENS_BY_EVENT[row.event_type] || [],
+    }));
+  }
+
   await ensureBusinessTemplatesInitialized(business);
 
   const params = [business];

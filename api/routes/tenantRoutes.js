@@ -18,6 +18,7 @@ const {
   getBusinessTemplates,
   upsertBusinessTemplate,
   previewBusinessTemplate,
+  ensureBusinessTemplatesInitialized,
 } = require("../services/dynamicSettingsService");
 const {
   getBusinessRecord,
@@ -366,12 +367,16 @@ router.post(
   async (req, res, next) => {
     try {
       const prefill = req.identity?.customer_prefill || {};
+      const rawHoldCust = req.body?.customer || {};
+      const hasExplicitHoldCust = Boolean(rawHoldCust.first_name || rawHoldCust.last_name);
       const customer = {
-        first_name: req.body?.customer?.first_name || prefill.first_name || "Checkout",
-        last_name: req.body?.customer?.last_name || prefill.last_name || "Guest",
-        email: req.body?.customer?.email || prefill.email,
-        phone_number: req.body?.customer?.phone_number || prefill.phone_number || "0000000000",
-        sms_opt_in: Boolean(req.body?.customer?.sms_opt_in),
+        first_name: rawHoldCust.first_name || prefill.first_name || "Checkout",
+        last_name: rawHoldCust.last_name || prefill.last_name || "Guest",
+        email: hasExplicitHoldCust ? (rawHoldCust.email || null) : (rawHoldCust.email || prefill.email),
+        phone_number: hasExplicitHoldCust
+          ? (rawHoldCust.phone_number || "0000000000")
+          : (rawHoldCust.phone_number || prefill.phone_number || "0000000000"),
+        sms_opt_in: Boolean(rawHoldCust.sms_opt_in),
       };
 
       const holdResult = await createCheckoutHold(req.business, {
@@ -430,11 +435,16 @@ router.post(
     try {
       const prefill = req.identity?.customer_prefill || {};
       const rawCust = req.body?.customer || {};
+      const hasExplicitCustomer = Boolean(rawCust.first_name || rawCust.last_name || req.body?.first_name);
       const customer = {
         first_name: rawCust.first_name || req.body?.first_name || prefill.first_name,
         last_name: rawCust.last_name || req.body?.last_name || prefill.last_name,
-        email: rawCust.email || req.body?.email || prefill.email,
-        phone_number: rawCust.phone_number || req.body?.phone_number || prefill.phone_number,
+        email: hasExplicitCustomer
+          ? (rawCust.email !== undefined ? rawCust.email : (req.body?.email || null))
+          : (rawCust.email || req.body?.email || prefill.email),
+        phone_number: hasExplicitCustomer
+          ? (rawCust.phone_number !== undefined ? rawCust.phone_number : (req.body?.phone_number || null))
+          : (rawCust.phone_number || req.body?.phone_number || prefill.phone_number),
         sms_opt_in: Boolean(rawCust.sms_opt_in ?? req.body?.sms_opt_in),
       };
 
@@ -759,15 +769,20 @@ router.get(
   requireSupervisor,
   async (req, res, next) => {
     try {
-      const { catalog, settings, time_modified } =
-        await getBusinessSettingsCatalogWithValues(req.business);
-      const templates = await getBusinessTemplates(req.business);
+      const isAll = String(req.business || "").toLowerCase() === "all";
+      const effectiveBiz = isAll ? "alpha_rentals" : req.business;
+      const { catalog, settings, time_modified, has_settings } =
+        await getBusinessSettingsCatalogWithValues(effectiveBiz);
+      const templates = isAll
+        ? await getBusinessTemplates("all")
+        : await getBusinessTemplates(effectiveBiz);
       return res.json({
         business: req.business,
         catalog,
         settings,
         templates,
         time_modified,
+        has_settings: isAll ? true : Boolean(has_settings),
       });
     } catch (err) {
       return next(err);
@@ -895,6 +910,28 @@ router.put(
       const reason =
         req.body?.reason || `Updated ${channel} template for ${eventType}`;
 
+      const isAll = String(req.business || "").toLowerCase() === "all";
+      if (isAll) {
+        const businesses = await listAllBusinesses();
+        let lastUpdated = null;
+        for (const b of businesses) {
+          lastUpdated = await upsertBusinessTemplate(
+            b.business,
+            eventType,
+            channel,
+            req.body,
+            req.actor?.user_guid,
+            reason
+          );
+        }
+        if (ioInstance) {
+          for (const b of businesses) {
+            ioInstance.to(b.business).emit("templates_updated", lastUpdated);
+          }
+        }
+        return res.json(lastUpdated || { success: true });
+      }
+
       const updated = await upsertBusinessTemplate(
         req.business,
         eventType,
@@ -926,7 +963,9 @@ router.get(
   requireSupervisor,
   async (req, res, next) => {
     try {
-      const items = await listNotificationOutbox(req.business, {
+      const isAll = String(req.business || "").toLowerCase() === "all";
+      const items = await listNotificationOutbox({
+        business: isAll ? null : req.business,
         status: req.query.status || null,
         channel: req.query.channel || null,
         template_type: req.query.template_type || null,
@@ -1048,14 +1087,40 @@ router.get(
   requireSupervisor,
   async (req, res, next) => {
     try {
-      const itemsRes = await db.query(
-        `SELECT * FROM items WHERE LOWER(business) = LOWER($1) ORDER BY time_created DESC`,
-        [req.business]
-      );
-      const unitsRes = await db.query(
-        `SELECT * FROM item_units WHERE LOWER(business) = LOWER($1) ORDER BY time_created ASC`,
-        [req.business]
-      );
+      const isAll = String(req.business || "").toLowerCase() === "all";
+      let itemsRes = isAll
+        ? await db.query(
+            `SELECT * FROM items ORDER BY time_created DESC`
+          )
+        : await db.query(
+            `SELECT * FROM items WHERE LOWER(business) = LOWER($1) ORDER BY time_created DESC`,
+            [req.business]
+          );
+
+      const lowerBiz = String(req.business || "").toLowerCase();
+      if (
+        itemsRes.rows.length === 0 &&
+        (lowerBiz === "alpha_rentals" || lowerBiz === "beta_rentals" || isAll)
+      ) {
+        await seedDemoMultiTenantInventory();
+        itemsRes = isAll
+          ? await db.query(
+              `SELECT * FROM items ORDER BY time_created DESC`
+            )
+          : await db.query(
+              `SELECT * FROM items WHERE LOWER(business) = LOWER($1) ORDER BY time_created DESC`,
+              [req.business]
+            );
+      }
+
+      let unitsRes = isAll
+        ? await db.query(
+            `SELECT * FROM item_units ORDER BY time_created ASC`
+          )
+        : await db.query(
+            `SELECT * FROM item_units WHERE LOWER(business) = LOWER($1) ORDER BY time_created ASC`,
+            [req.business]
+          );
 
       const unitsByItem = {};
       for (const unit of unitsRes.rows) {
@@ -1170,14 +1235,18 @@ router.put(
     const client = await db.connect();
     try {
       await client.query("BEGIN");
-      const beforeRes = await client.query(
-        `SELECT * FROM items WHERE item_guid = $1 AND LOWER(business) = LOWER($2) LIMIT 1`,
-        [req.params.id, req.business]
-      );
+      const isAll = String(req.business || "").toLowerCase() === "all";
+      const beforeRes = isAll
+        ? await client.query(`SELECT * FROM items WHERE item_guid = $1 LIMIT 1`, [req.params.id])
+        : await client.query(
+            `SELECT * FROM items WHERE item_guid = $1 AND LOWER(business) = LOWER($2) LIMIT 1`,
+            [req.params.id, req.business]
+          );
       if (beforeRes.rows.length === 0) {
         throw new ExpressError("Catalog item not found for this business tenant", 404);
       }
       const beforeState = beforeRes.rows[0];
+      const effectiveBusiness = beforeState.business;
       const name =
         req.body?.name !== undefined ? String(req.body.name).trim() : beforeState.name;
       const description =
@@ -1214,12 +1283,12 @@ router.put(
           JSON.stringify(images),
           isActive,
           req.params.id,
-          req.business,
+          effectiveBusiness,
         ]
       );
 
       await recordSupervisorAuditLog(client, {
-        business: req.business,
+        business: effectiveBusiness,
         actorGuid: req.actor?.user_guid,
         action: "ITEM_UPDATED",
         entityType: "items",
@@ -1392,8 +1461,32 @@ router.get(
         end_date,
         limit = 100,
       } = req.query;
-      const params = [req.business];
-      const clauses = ["LOWER(business) = LOWER($1)"];
+      const isAdmin = Boolean(
+        req.actor?.is_admin ||
+        String(req.actor?.permission_group || "").toLowerCase() === "admin"
+      );
+      const isAll = String(req.business || "").toLowerCase() === "all";
+      const params = [];
+      const clauses = [];
+
+      // 1. Business & Entity Role Scoping:
+      // Admin sees all including customers.
+      // Business owner only sees business owners and agents within their business.
+      if (isAdmin) {
+        if (!isAll) {
+          params.push(req.business);
+          clauses.push(`(LOWER(business) = LOWER($${params.length}) OR LOWER(business) = 'customers' OR LOWER(entity_type) = 'customer')`);
+        }
+      } else {
+        const tenantBiz = req.business || req.actor?.business;
+        params.push(tenantBiz);
+        clauses.push(`LOWER(business) = LOWER($${params.length})`);
+        clauses.push(`(
+          (UPPER(action) = 'PASSWORD_RESET' AND LOWER(entity_type) IN ('business_owner', 'supervisor', 'agent'))
+          OR
+          (UPPER(action) <> 'PASSWORD_RESET' AND LOWER(entity_type) NOT IN ('customer', 'customers', 'admin'))
+        )`);
+      }
 
       if (action && String(action).trim()) {
         const cleanAction = String(action).trim().toUpperCase();
@@ -1418,10 +1511,11 @@ router.get(
       }
 
       params.push(Math.min(Number(limit) || 100, 200));
+      const whereSql = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
       const result = await db.query(
         `SELECT *
          FROM supervisor_audit_logs
-         WHERE ${clauses.join(" AND ")}
+         ${whereSql}
          ORDER BY time_created DESC
          LIMIT $${params.length}`,
         params
@@ -1521,24 +1615,103 @@ router.get(
   requireSupervisor,
   async (req, res, next) => {
     try {
-      const [countsQuery, schemaStatus] = await Promise.all([
-        db.query(
-          `SELECT
-             (SELECT COUNT(*)::int FROM items WHERE LOWER(business) = LOWER($1)) AS items_count,
-             (SELECT COUNT(*)::int FROM item_units WHERE LOWER(business) = LOWER($1)) AS units_count,
-             (SELECT COUNT(*)::int FROM customers WHERE LOWER(business) = LOWER($1)) AS customers_count,
-             (SELECT COUNT(*)::int FROM reservations WHERE LOWER(business) = LOWER($1)) AS reservations_count,
-             (SELECT COUNT(*)::int FROM reservation_changes WHERE LOWER(business) = LOWER($1)) AS reservation_changes_count,
-             (SELECT COUNT(*)::int FROM payments WHERE LOWER(business) = LOWER($1)) AS payments_count,
-             (SELECT COUNT(*)::int FROM inventory_blackouts WHERE LOWER(business) = LOWER($1)) AS blackouts_count,
-             (SELECT COUNT(*)::int FROM supervisor_audit_logs WHERE LOWER(business) = LOWER($1)) AS audit_logs_count,
-             (SELECT COUNT(*)::int FROM notification_outbox WHERE LOWER(business) = LOWER($1)) AS outbox_count,
-             (SELECT COUNT(*)::int FROM business_templates WHERE LOWER(business) = LOWER($1)) AS templates_count,
-             (SELECT COUNT(*)::int FROM business_settings WHERE LOWER(business) = LOWER($1)) AS configured_settings_count`,
-          [req.business]
-        ),
+      const isAll = String(req.business || "").toLowerCase() === "all";
+
+      if (isAll) {
+        const allBiz = await listAllBusinesses();
+        for (const b of allBiz) {
+          await ensureBusinessTemplatesInitialized(b.business);
+        }
+      } else {
+        await ensureBusinessTemplatesInitialized(req.business);
+      }
+
+      const isAdminUser = Boolean(
+        req.actor?.is_admin ||
+        String(req.actor?.permission_group || "").toLowerCase() === "admin"
+      );
+
+      const auditLogScopeSql = isAdminUser
+        ? "(LOWER(business) = LOWER($1) OR LOWER(business) = 'customers' OR LOWER(entity_type) = 'customer')"
+        : `(LOWER(business) = LOWER($1) AND (
+             (UPPER(action) = 'PASSWORD_RESET' AND LOWER(entity_type) IN ('business_owner', 'supervisor', 'agent'))
+             OR
+             (UPPER(action) <> 'PASSWORD_RESET' AND LOWER(entity_type) NOT IN ('customer', 'customers', 'admin'))
+           ))`;
+
+      const countsPromise = isAll
+        ? db.query(
+            `SELECT
+               (SELECT COUNT(*)::int FROM items) AS items_count,
+               (SELECT COUNT(*)::int FROM item_units) AS units_count,
+               (SELECT COUNT(*)::int FROM customers) AS customers_count,
+               (SELECT COUNT(*)::int FROM reservations) AS reservations_count,
+               (SELECT COUNT(*)::int FROM reservation_changes) AS reservation_changes_count,
+               (SELECT COUNT(*)::int FROM payments) AS payments_count,
+               (SELECT COUNT(*)::int FROM inventory_blackouts) AS blackouts_count,
+               (SELECT COUNT(*)::int FROM supervisor_audit_logs) AS audit_logs_count,
+               (SELECT COUNT(*)::int FROM notification_outbox) AS outbox_count,
+               (SELECT COUNT(*)::int FROM business_templates) AS templates_count,
+               (SELECT COUNT(*)::int FROM business_settings) AS configured_settings_count`
+          )
+        : db.query(
+            `SELECT
+               (SELECT COUNT(*)::int FROM items WHERE LOWER(business) = LOWER($1)) AS items_count,
+               (SELECT COUNT(*)::int FROM item_units WHERE LOWER(business) = LOWER($1)) AS units_count,
+               (SELECT COUNT(*)::int FROM customers WHERE LOWER(business) = LOWER($1)) AS customers_count,
+               (SELECT COUNT(*)::int FROM reservations WHERE LOWER(business) = LOWER($1)) AS reservations_count,
+               (SELECT COUNT(*)::int FROM reservation_changes WHERE LOWER(business) = LOWER($1)) AS reservation_changes_count,
+               (SELECT COUNT(*)::int FROM payments WHERE LOWER(business) = LOWER($1)) AS payments_count,
+               (SELECT COUNT(*)::int FROM inventory_blackouts WHERE LOWER(business) = LOWER($1)) AS blackouts_count,
+               (SELECT COUNT(*)::int FROM supervisor_audit_logs WHERE ${auditLogScopeSql}) AS audit_logs_count,
+               (SELECT COUNT(*)::int FROM notification_outbox WHERE LOWER(business) = LOWER($1)) AS outbox_count,
+               (SELECT COUNT(*)::int FROM business_templates WHERE LOWER(business) = LOWER($1)) AS templates_count,
+               (SELECT COUNT(*)::int FROM business_settings WHERE LOWER(business) = LOWER($1)) AS configured_settings_count`,
+            [req.business]
+          );
+
+      let [countsQuery, schemaStatus] = await Promise.all([
+        countsPromise,
         inspectHarmonizedEnterpriseSchema(),
       ]);
+
+      const lowerBiz = String(req.business || "").toLowerCase();
+      if (
+        Number(countsQuery.rows[0]?.items_count || 0) === 0 &&
+        (lowerBiz === "alpha_rentals" || lowerBiz === "beta_rentals" || isAll)
+      ) {
+        await seedDemoMultiTenantInventory();
+        countsQuery = isAll
+          ? await db.query(
+              `SELECT
+                 (SELECT COUNT(*)::int FROM items) AS items_count,
+                 (SELECT COUNT(*)::int FROM item_units) AS units_count,
+                 (SELECT COUNT(*)::int FROM customers) AS customers_count,
+                 (SELECT COUNT(*)::int FROM reservations) AS reservations_count,
+                 (SELECT COUNT(*)::int FROM reservation_changes) AS reservation_changes_count,
+                 (SELECT COUNT(*)::int FROM payments) AS payments_count,
+                 (SELECT COUNT(*)::int FROM inventory_blackouts) AS blackouts_count,
+                 (SELECT COUNT(*)::int FROM supervisor_audit_logs) AS audit_logs_count,
+                 (SELECT COUNT(*)::int FROM notification_outbox) AS outbox_count,
+                 (SELECT COUNT(*)::int FROM business_templates) AS templates_count,
+                 (SELECT COUNT(*)::int FROM business_settings) AS configured_settings_count`
+            )
+          : await db.query(
+              `SELECT
+                 (SELECT COUNT(*)::int FROM items WHERE LOWER(business) = LOWER($1)) AS items_count,
+                 (SELECT COUNT(*)::int FROM item_units WHERE LOWER(business) = LOWER($1)) AS units_count,
+                 (SELECT COUNT(*)::int FROM customers WHERE LOWER(business) = LOWER($1)) AS customers_count,
+                 (SELECT COUNT(*)::int FROM reservations WHERE LOWER(business) = LOWER($1)) AS reservations_count,
+                 (SELECT COUNT(*)::int FROM reservation_changes WHERE LOWER(business) = LOWER($1)) AS reservation_changes_count,
+                 (SELECT COUNT(*)::int FROM payments WHERE LOWER(business) = LOWER($1)) AS payments_count,
+                 (SELECT COUNT(*)::int FROM inventory_blackouts WHERE LOWER(business) = LOWER($1)) AS blackouts_count,
+                 (SELECT COUNT(*)::int FROM supervisor_audit_logs WHERE ${auditLogScopeSql}) AS audit_logs_count,
+                 (SELECT COUNT(*)::int FROM notification_outbox WHERE LOWER(business) = LOWER($1)) AS outbox_count,
+                 (SELECT COUNT(*)::int FROM business_templates WHERE LOWER(business) = LOWER($1)) AS templates_count,
+                 (SELECT COUNT(*)::int FROM business_settings WHERE LOWER(business) = LOWER($1)) AS configured_settings_count`,
+              [req.business]
+            );
+      }
 
       return res.json({
         business: req.business,
@@ -1743,15 +1916,21 @@ router.get(
   requireSupervisor,
   async (req, res, next) => {
     try {
+      const isAll = String(req.business || "").toLowerCase() === "all";
+      const params = [];
+      let bizFilter = "";
+      if (!isAll) {
+        params.push(req.business);
+        bizFilter = `LOWER(p.business) = LOWER($${params.length}) AND `;
+      }
       const resQuery = await db.query(
         `SELECT p.*, r.customer_guid, r.status AS reservation_status
          FROM payments p
          LEFT JOIN reservations r ON r.reservation_guid = p.reservation_guid
-         WHERE LOWER(p.business) = LOWER($1)
-           AND (p.type = 'REFUND' OR p.status IN ('FAILED', 'PENDING', 'MANUAL'))
+         WHERE ${bizFilter}(p.type = 'REFUND' OR p.status IN ('FAILED', 'PENDING', 'MANUAL'))
          ORDER BY p.time_created DESC
          LIMIT 100`,
-        [req.business]
+        params
       );
       return res.json(resQuery.rows);
     } catch (err) {
@@ -1834,14 +2013,22 @@ router.get(
   requireSupervisor,
   async (req, res, next) => {
     try {
-      const result = await db.query(
-        `SELECT b.*, b.date_range::text AS date_range_text, i.name AS item_name
-         FROM inventory_blackouts b
-         LEFT JOIN items i ON i.item_guid = b.item_guid
-         WHERE LOWER(b.business) = LOWER($1)
-         ORDER BY b.time_created DESC`,
-        [req.business]
-      );
+      const isAll = String(req.business || "").toLowerCase() === "all";
+      const result = isAll
+        ? await db.query(
+            `SELECT b.*, b.date_range::text AS date_range_text, i.name AS item_name
+             FROM inventory_blackouts b
+             LEFT JOIN items i ON i.item_guid = b.item_guid
+             ORDER BY b.time_created DESC`
+          )
+        : await db.query(
+            `SELECT b.*, b.date_range::text AS date_range_text, i.name AS item_name
+             FROM inventory_blackouts b
+             LEFT JOIN items i ON i.item_guid = b.item_guid
+             WHERE LOWER(b.business) = LOWER($1)
+             ORDER BY b.time_created DESC`,
+            [req.business]
+          );
       return res.json(result.rows);
     } catch (err) {
       return next(err);
@@ -1937,6 +2124,56 @@ router.post(
         ...insertRes.rows[0],
         conflicting_reservations: conflictsRes.rows,
       });
+    } catch (err) {
+      await client.query("ROLLBACK");
+      return next(err);
+    } finally {
+      client.release();
+    }
+  }
+);
+
+/**
+ * DELETE /api/admin/:business/blackouts/:blackout_guid
+ * Delete an inventory blackout window and record in audit log.
+ */
+router.delete(
+  "/api/admin/:business/blackouts/:blackout_guid",
+  resolveTenant,
+  requireSupervisor,
+  async (req, res, next) => {
+    const client = await db.connect();
+    try {
+      const blackoutGuid = req.params.blackout_guid;
+      await client.query("BEGIN");
+      const beforeRes = await client.query(
+        `SELECT * FROM inventory_blackouts
+         WHERE blackout_guid = $1 AND (LOWER(business) = LOWER($2) OR $2 = 'all')
+         LIMIT 1`,
+        [blackoutGuid, req.business]
+      );
+      if (beforeRes.rows.length === 0) {
+        throw new ExpressError("Blackout window not found", 404);
+      }
+
+      await client.query(
+        `DELETE FROM inventory_blackouts WHERE blackout_guid = $1`,
+        [blackoutGuid]
+      );
+
+      await recordSupervisorAuditLog(client, {
+        business: beforeRes.rows[0].business || req.business,
+        actorGuid: req.actor?.user_guid || "supervisor",
+        action: "BLACKOUT_DELETED",
+        entityType: "inventory_blackouts",
+        entityGuid: blackoutGuid,
+        reason: "Blackout date removed by supervisor",
+        beforeState: beforeRes.rows[0],
+        afterState: null,
+      });
+
+      await client.query("COMMIT");
+      return res.json({ success: true, deleted: blackoutGuid });
     } catch (err) {
       await client.query("ROLLBACK");
       return next(err);

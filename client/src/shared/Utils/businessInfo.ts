@@ -18,7 +18,29 @@ export interface BusinessInfo {
   summary?: string;
   is_active?: boolean;
   time_modified?: string;
+  has_info?: boolean;
 }
+
+export const formatUserFriendlyBusinessName = (
+  rawBusiness?: string | null,
+  businessName?: string | null
+): string => {
+  const cleanName = (businessName || '').trim();
+  const cleanSlug = (rawBusiness || '').trim();
+
+  // If a descriptive business_name is present that isn't just the raw slug
+  if (cleanName && cleanName.toLowerCase() !== cleanSlug.toLowerCase()) {
+    return cleanName;
+  }
+
+  // Format slug by replacing underscores/hyphens with spaces and capitalizing words
+  const source = cleanName || cleanSlug;
+  if (!source) return 'Business';
+
+  return source
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+};
 
 const CACHE_PREFIX = 'businessInfo:';
 const CACHE_TTL_MS = 5 * 60 * 1000;

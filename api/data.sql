@@ -15,6 +15,24 @@ DROP TABLE IF EXISTS puzzles_type CASCADE;
 DROP TABLE IF EXISTS events_table CASCADE;
 DROP TABLE IF EXISTS business_table CASCADE;
 DROP TABLE IF EXISTS users_table CASCADE;
+DROP TABLE IF EXISTS roles_table CASCADE;
+
+CREATE TABLE IF NOT EXISTS roles_table (
+    id SERIAL PRIMARY KEY,
+    role VARCHAR(50) UNIQUE NOT NULL,
+    description VARCHAR(255),
+    is_elevated BOOLEAN DEFAULT false,
+    time_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+INSERT INTO roles_table (role, description, is_elevated) VALUES
+    ('Admin', 'System Administrator with full access', true),
+    ('Business_Owner', 'Business Owner with location management access', true),
+    ('Agent', 'Operational staff and customer check-in agent', true),
+    ('Customer', 'Public customer account', false)
+ON CONFLICT (role) DO UPDATE SET
+    description = EXCLUDED.description,
+    is_elevated = EXCLUDED.is_elevated;
 
 CREATE TABLE IF NOT EXISTS users_table (
     id SERIAL,
@@ -24,11 +42,16 @@ CREATE TABLE IF NOT EXISTS users_table (
     email VARCHAR(100),
     phone_number VARCHAR(15),
     address VARCHAR(255),
-    permission_group VARCHAR(20) DEFAULT 'Customer',
+    role_id INTEGER REFERENCES roles_table(id) ON DELETE SET NULL,
+    permission_group VARCHAR(50) DEFAULT 'Customer' REFERENCES roles_table(role) ON UPDATE CASCADE,
+    password_hash TEXT,
+    last_password_hash TEXT,
     is_admin BOOLEAN DEFAULT false,
     business VARCHAR(100),
     time_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX IF NOT EXISTS idx_users_table_role_id ON users_table(role_id);
+CREATE INDEX IF NOT EXISTS idx_users_table_permission_group ON users_table(permission_group);
 
 CREATE TABLE IF NOT EXISTS business_table (
     id SERIAL,
@@ -156,6 +179,7 @@ CREATE TABLE IF NOT EXISTS customers (
     email VARCHAR(100) NOT NULL,
     phone_number VARCHAR(20) NOT NULL,
     password_hash TEXT,
+    last_password_hash TEXT,
     sms_opt_in BOOLEAN DEFAULT FALSE,
     time_created TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     time_modified TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -310,11 +334,11 @@ CREATE INDEX IF NOT EXISTS idx_blackouts_business ON inventory_blackouts(busines
 CREATE TABLE IF NOT EXISTS supervisor_audit_logs (
     id SERIAL,
     log_guid VARCHAR(50) PRIMARY KEY,
-    business VARCHAR(100) NOT NULL,
-    actor_guid VARCHAR(50) NOT NULL,
+    business VARCHAR(100),
+    actor_guid VARCHAR(150) NOT NULL,
     action VARCHAR(50) NOT NULL,
-    entity_type VARCHAR(50) NOT NULL,
-    entity_guid VARCHAR(50) NOT NULL,
+    entity_type VARCHAR(100) NOT NULL,
+    entity_guid VARCHAR(150) NOT NULL,
     reason TEXT,
     before_state JSONB,
     after_state JSONB,

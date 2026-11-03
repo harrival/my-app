@@ -46,6 +46,24 @@ function prettifySlug(slug) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+function attachHasInfo(record) {
+  if (!record) return record;
+  const hasInfo = Boolean(
+    record.physical_address ||
+    record.contact_email ||
+    record.contact_phone ||
+    record.city ||
+    record.state ||
+    record.postal_code ||
+    record.country ||
+    record.summary ||
+    (record.business_name &&
+      record.business_name.trim().toLowerCase() !== String(record.business || "").trim().toLowerCase() &&
+      record.business_name.trim().toLowerCase() !== prettifySlug(record.business).toLowerCase())
+  );
+  return { ...record, has_info: hasInfo };
+}
+
 async function findBusiness(client, { businessGuid, business, userGuid }) {
   if (businessGuid) {
     const r = await client.query(`SELECT * FROM business_table WHERE business_guid = $1 LIMIT 1`, [businessGuid]);
@@ -86,13 +104,14 @@ async function ensureBusinessRecord(business, userGuid = null) {
 /** Get a business by slug or by linked supervisor user_guid. */
 async function getBusinessRecord({ business = null, userGuid = null } = {}) {
   const found = await findBusiness(db, { business, userGuid });
-  if (found) return found;
+  if (found) return attachHasInfo(found);
 
   if (!business && userGuid) {
     const u = await db.query(`SELECT business FROM users_table WHERE user_guid = $1 LIMIT 1`, [userGuid]);
     business = u.rows[0]?.business || null;
   }
-  return business ? ensureBusinessRecord(business, userGuid) : null;
+  const ensured = business ? await ensureBusinessRecord(business, userGuid) : null;
+  return ensured ? attachHasInfo(ensured) : null;
 }
 
 /** Create or update business info; keeps users_table + business_settings synchronized. */
@@ -192,7 +211,7 @@ async function upsertBusinessRecord(payload = {}, actorGuid = "supervisor") {
     });
 
     await client.query("COMMIT");
-    return saved;
+    return attachHasInfo(saved);
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;
@@ -205,7 +224,7 @@ async function upsertBusinessRecord(payload = {}, actorGuid = "supervisor") {
 async function listAllBusinesses() {
   const missing = await db.query(
     `SELECT DISTINCT TRIM(t.business) AS business FROM (
-       SELECT business FROM users_table WHERE LOWER(COALESCE(permission_group,'')) = 'supervisor'
+       SELECT business FROM users_table WHERE LOWER(COALESCE(permission_group,'')) IN ('business_owner', 'supervisor')
        UNION SELECT business FROM items WHERE is_active = TRUE
      ) t
      WHERE t.business IS NOT NULL AND TRIM(t.business) <> ''

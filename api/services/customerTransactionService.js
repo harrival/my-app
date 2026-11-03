@@ -20,22 +20,34 @@ async function recordCustomerForTransaction(clientOrDb, payload = {}) {
   const phoneNumber = String(payload.phone_number || payload.phone || "").trim();
   const smsOptIn = Boolean(payload.sms_opt_in);
 
-  if (!firstName || !lastName || !email || !phoneNumber) {
+  if (!firstName || !lastName || (!email && !phoneNumber)) {
     throw new ExpressError(
-      "first_name, last_name, email, and phone_number are required for customer transactions",
+      "First name, last name, and either an email or phone number are required for customer transactions",
       400
     );
   }
 
   // Customer information is enterprise-wide (not tied to a single business)
-  const existingRes = await runner.query(
-    `SELECT *
-     FROM customers
-     WHERE LOWER(email) = LOWER($1)
-     ORDER BY time_modified DESC NULLS LAST, id DESC
-     LIMIT 1`,
-    [email]
-  );
+  let existingRes = { rows: [] };
+  if (email) {
+    existingRes = await runner.query(
+      `SELECT *
+       FROM customers
+       WHERE LOWER(email) = LOWER($1)
+       ORDER BY time_modified DESC NULLS LAST, id DESC
+       LIMIT 1`,
+      [email]
+    );
+  } else if (phoneNumber) {
+    existingRes = await runner.query(
+      `SELECT *
+       FROM customers
+       WHERE phone_number = $1
+       ORDER BY time_modified DESC NULLS LAST, id DESC
+       LIMIT 1`,
+      [phoneNumber]
+    );
+  }
 
   if (existingRes.rows.length > 0) {
     const existing = existingRes.rows[0];
@@ -43,12 +55,13 @@ async function recordCustomerForTransaction(clientOrDb, payload = {}) {
       `UPDATE customers
        SET first_name = $1,
            last_name = $2,
-           phone_number = $3,
-           sms_opt_in = $4,
+           email = COALESCE(NULLIF($3, ''), email),
+           phone_number = COALESCE(NULLIF($4, ''), phone_number),
+           sms_opt_in = $5,
            time_modified = CURRENT_TIMESTAMP
-       WHERE customer_guid = $5
+       WHERE customer_guid = $6
        RETURNING *`,
-      [firstName, lastName, phoneNumber, smsOptIn, existing.customer_guid]
+      [firstName, lastName, email || null, phoneNumber || null, smsOptIn, existing.customer_guid]
     );
     return {
       customer: updatedRes.rows[0],
@@ -63,7 +76,7 @@ async function recordCustomerForTransaction(clientOrDb, payload = {}) {
       (customer_guid, business, first_name, last_name, email, phone_number, sms_opt_in, time_created, time_modified)
      VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
      RETURNING *`,
-    [customerGuid, business, firstName, lastName, email, phoneNumber, smsOptIn]
+    [customerGuid, business, firstName, lastName, email || null, phoneNumber || null, smsOptIn]
   );
 
   return {
@@ -85,10 +98,16 @@ async function listBusinessCustomers(business, optionsOrLimit = 50) {
     : Math.min(Number(optionsOrLimit) || 50, 200);
   const emailFilter = isObj && optionsOrLimit.email ? String(optionsOrLimit.email).trim() : null;
 
-  const params = [business];
-  const clauses = [
-    "(LOWER(r.business) = LOWER($1) OR LOWER(COALESCE(c.business, '')) = LOWER($1) OR c.business IS NULL)",
-  ];
+  const isAll = !business || String(business).toLowerCase() === "all";
+  const params = [];
+  const clauses = [];
+
+  if (!isAll) {
+    params.push(business);
+    clauses.push(
+      "(LOWER(r.business) = LOWER($1) OR LOWER(COALESCE(c.business, '')) = LOWER($1) OR c.business IS NULL)"
+    );
+  }
 
   if (emailFilter) {
     params.push(`%${emailFilter.toLowerCase()}%`);
@@ -96,6 +115,11 @@ async function listBusinessCustomers(business, optionsOrLimit = 50) {
   }
 
   params.push(limit);
+
+  const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+  const joinCondition = isAll
+    ? "ON r.customer_guid = c.customer_guid"
+    : "ON r.customer_guid = c.customer_guid AND LOWER(r.business) = LOWER($1)";
 
   const res = await db.query(
     `SELECT
@@ -107,8 +131,8 @@ async function listBusinessCustomers(business, optionsOrLimit = 50) {
        )::int AS confirmed_spend_cents
      FROM customers c
      LEFT JOIN reservations r
-       ON r.customer_guid = c.customer_guid AND LOWER(r.business) = LOWER($1)
-     WHERE ${clauses.join(" AND ")}
+       ${joinCondition}
+     ${whereClause}
      GROUP BY c.id, c.customer_guid
      ORDER BY c.time_modified DESC
      LIMIT $${params.length}`,

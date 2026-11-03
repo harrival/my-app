@@ -344,11 +344,12 @@ async function checkItemAvailability(
  * Evaluate hours remaining before reservation start_instant and classify cutoff window.
  */
 function evaluateCutoffWindow(startInstantUtc, settings, overrideNow = null) {
+  const startObj = startInstantUtc instanceof Date ? startInstantUtc : new Date(startInstantUtc);
   const now = getNow(overrideNow);
   const cutoffHours = Number(settings.free_change_cutoff_hours ?? 168);
   const lateFeePercentage = Number(settings.late_fee_percentage ?? 25);
 
-  const msUntilStart = startInstantUtc.getTime() - now.getTime();
+  const msUntilStart = startObj.getTime() - now.getTime();
   const hoursUntilStart = msUntilStart / (1000 * 60 * 60);
 
   const isAfterStart = msUntilStart <= 0;
@@ -357,7 +358,7 @@ function evaluateCutoffWindow(startInstantUtc, settings, overrideNow = null) {
 
   return {
     now_iso: now.toISOString(),
-    start_iso: startInstantUtc.toISOString(),
+    start_iso: startObj.toISOString(),
     hours_until_start: Number(hoursUntilStart.toFixed(2)),
     cutoff_hours: cutoffHours,
     late_fee_percentage: lateFeePercentage,
@@ -1062,8 +1063,7 @@ async function confirmReservationCheckout(business, payload = {}) {
       customer &&
       customer.first_name &&
       customer.last_name &&
-      customer.email &&
-      customer.phone_number
+      (customer.email || customer.phone_number)
     ) {
       const custResult = await recordCustomerForTransaction(client, {
         business,
@@ -1628,10 +1628,17 @@ async function listBusinessReservations(
   business,
   { status = null, search = null, limit = 50, customerGuid = null } = {}
 ) {
-  await sweepExpiredHolds(db, business);
+  if (business && business !== "all") {
+    await sweepExpiredHolds(db, business);
+  }
 
-  const params = [business];
-  const clauses = ["LOWER(r.business) = LOWER($1)"];
+  const params = [];
+  const clauses = ["1=1"];
+
+  if (business && business !== "all") {
+    params.push(business);
+    clauses.push(`LOWER(r.business) = LOWER($${params.length})`);
+  }
 
   if (customerGuid && String(customerGuid).trim()) {
     params.push(String(customerGuid).trim());

@@ -143,8 +143,10 @@ const EditPuzzleForm = ({
                         onPlayerUpdated(updatedPlayerObj);
                     }
                 }
-            } catch (error) {
-                console.error('Error updating player playTime:', error);
+            } catch (error: any) {
+                console.error('Error updating player:', error);
+                alert(error?.response?.data?.error || 'Failed to update player.');
+                return;
             }
             setShowEditPuzzleForm(false);
             setFormState({
@@ -212,7 +214,7 @@ const EditPuzzleForm = ({
                         value={formState.puzzlePet}
                         onChange={handleSelectChange}
                     >
-                        <option value="">Select a pet</option>
+                        <option value="">Select Puzzle Pet...</option>
                         <option value="CAT">Cat</option>
                         <option value="DOG">Dog</option>
                     </select>

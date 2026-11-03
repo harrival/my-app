@@ -169,6 +169,7 @@ const PrinterSection: React.FC = () => {
                   step="0.05"
                   min={PAPER_MIN_IN}
                   max={PAPER_MAX_IN}
+                  placeholder="4.00"
                   value={width}
                   onChange={e => { setWidth(e.target.value); setStatus(null); }}
                 />
@@ -198,6 +199,7 @@ const PrinterSection: React.FC = () => {
                   step="0.05"
                   min={PAPER_MIN_IN}
                   max={PAPER_MAX_IN}
+                  placeholder="6.00"
                   value={height}
                   onChange={e => { setHeight(e.target.value); setStatus(null); }}
                 />

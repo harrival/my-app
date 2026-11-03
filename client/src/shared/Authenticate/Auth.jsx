@@ -8,10 +8,10 @@ import { QRCodeSVG } from 'qrcode.react';
 import { getResolvedBaseUrl } from '../../shared/Utils/apiConfig';
 import Card from '../../UI/Card/Card';
 import Button from '../../UI/Button/Button';
-import appLogo from '../../assets/38.jpg';
 import classes from './Auth.module.scss';
-
-const MAX_OTP_ATTEMPTS = 3;
+import PasswordStrengthChecklist from './PasswordStrengthChecklist';
+import PasswordInput from './PasswordInput';
+import { evaluatePasswordStrength } from '../Utils/passwordValidation';
 
 const AuthenticateUser = () => {
     const auth = useContext(AuthContext);
@@ -37,15 +37,31 @@ const AuthenticateUser = () => {
 
     // Account Sign-In state
     const [identifier, setIdentifier] = useState('');
-    const [step, setStep] = useState(1); // 1: identifier, 2: verify
-    const [matchedSource, setMatchedSource] = useState(null);
+    const [signInPassword, setSignInPassword] = useState('');
+    const [signInStep, setSignInStep] = useState('lookup'); // 'lookup' | 'verify_2fa' | 'staff_first_time' | 'staff_password' | 'staff_2fa' | 'customer_password' | 'forgot_password'
     const [authenticatedUser, setAuthenticatedUser] = useState(null);
     const [customerHasPassword, setCustomerHasPassword] = useState(true);
+    const [maskedPhone, setMaskedPhone] = useState('');
+    const [twoFaData, setTwoFaData] = useState(null);
+    const [verificationOtp, setVerificationOtp] = useState('');
 
-    // 6-digit verification code state
-    const [generatedOtp, setGeneratedOtp] = useState('');
-    const [otpInput, setOtpInput] = useState('');
-    const [otpAttempts, setOtpAttempts] = useState(0);
+    // First-time staff setup state
+    const [staffNewPassword, setStaffNewPassword] = useState('');
+    const [staffConfirmPassword, setStaffConfirmPassword] = useState('');
+    const [staffSetupOtp, setStaffSetupOtp] = useState('');
+
+    // Returning staff state
+    const [staffPassword, setStaffPassword] = useState('');
+    const [staff2faOtp, setStaff2faOtp] = useState('');
+
+    // Forgot / reset password state
+    const [resetIdentifier, setResetIdentifier] = useState('');
+    const [resetOtp, setResetOtp] = useState('');
+    const [resetStep, setResetStep] = useState('enter_code'); // 'enter_code' | 'set_password'
+    const [resetToken, setResetToken] = useState('');
+    const [resetNewPassword, setResetNewPassword] = useState('');
+    const [resetConfirmPassword, setResetConfirmPassword] = useState('');
+    const [devPin, setDevPin] = useState('');
 
     // Password state
     const [customerPassword, setCustomerPassword] = useState('');
@@ -164,7 +180,45 @@ const AuthenticateUser = () => {
         };
     }, [socket, authMode, linkTicket, navigate, auth, refreshProfile, isMobile, isTV, requestedProtectedPath]);
 
-    const handleLookupSubmit = async (event) => {
+    const handleBackToLookup = () => {
+        setSignInStep('lookup');
+        setAuthenticatedUser(null);
+        setTwoFaData(null);
+        setVerificationOtp('');
+        setSignInPassword('');
+        setMaskedPhone('');
+        setStaffNewPassword('');
+        setStaffConfirmPassword('');
+        setStaffSetupOtp('');
+        setStaffPassword('');
+        setStaff2faOtp('');
+        setResetIdentifier('');
+        setResetOtp('');
+        setResetNewPassword('');
+        setResetConfirmPassword('');
+        setCustomerPassword('');
+        setDevPin('');
+        setError('');
+        setInfoMessage('');
+    };
+
+    const handleLoginSuccess = async (profileData) => {
+        if (!profileData?.user_guid) {
+            setError('Login succeeded but could not establish profile session.');
+            return;
+        }
+        await refreshProfile(profileData.user_guid);
+        auth.login();
+        if (profileData.permission_group && profileData.permission_group.toLowerCase() !== 'customer') {
+            navigateStaffUser(profileData);
+        } else if (requestedProtectedPath) {
+            navigate(requestedProtectedPath, { replace: true });
+        } else {
+            navigate('/', { replace: true });
+        }
+    };
+
+    const handleSignInSubmit = async (event) => {
         event.preventDefault();
         setError('');
         setInfoMessage('');
@@ -175,90 +229,237 @@ const AuthenticateUser = () => {
             return;
         }
 
+        if (!signInPassword) {
+            setError('Please enter your password.');
+            return;
+        }
+
         setLoading(true);
         try {
             const currentApiUrl = getResolvedBaseUrl();
-            const response = await axios.post(`${currentApiUrl}/auth/lookup`, {
-                identifier: trimmed
+            const response = await axios.post(`${currentApiUrl}/auth/login`, {
+                identifier: trimmed,
+                password: signInPassword
             });
 
             const data = response.data;
 
-            if (data?.found && data.source === 'users_table') {
-                setMatchedSource('users_table');
-                setAuthenticatedUser(data.account);
-                const otp = Math.floor(100000 + Math.random() * 900000).toString();
-                setGeneratedOtp(otp);
-                console.log('--- VERIFICATION CODE ---');
-                console.log(`Code: ${otp}`);
-                console.log('-------------------------');
-
-                setOtpAttempts(0);
-                setOtpInput('');
-                setStep(2);
-                setInfoMessage('Please enter your 6-digit verification code.');
-            } else if (data?.found && data.source === 'customers') {
-                setMatchedSource('customers');
-                setAuthenticatedUser(data.account);
-                setCustomerHasPassword(Boolean(data.has_password));
-                setCustomerPassword('');
-                setStep(2);
-                setInfoMessage(
-                    data.has_password
-                        ? 'Please enter your password to sign in.'
-                        : 'Please create a password below to complete your sign in.'
-                );
-            } else {
-                setError('No account found with those details. Please create an account to continue.');
-                if (trimmed.includes('@')) {
-                    setSignUpEmail(trimmed);
-                } else {
-                    setSignUpPhone(trimmed);
+            if (data?.require_2fa || data?.requires_2fa) {
+                setTwoFaData({
+                    identifier: trimmed,
+                    user_guid: data.user_guid,
+                    customer_guid: data.customer_guid,
+                    source: data.source,
+                    masked_phone: data.masked_phone
+                });
+                setMaskedPhone(data.masked_phone || '');
+                if (data.dev_pin) {
+                    console.log('====================================================');
+                    console.log(`📱 [DEV OTP CONSOLE] 🔐 6-DIGIT VERIFICATION PIN:`, data.dev_pin);
+                    console.log(`   Account:`, trimmed);
+                    console.log('====================================================');
+                    setDevPin(data.dev_pin);
                 }
+                setSignInStep('verify_2fa');
+                setVerificationOtp('');
+                setInfoMessage(
+                    data.message ||
+                    `Credentials verified! Enter the 6-digit verification code sent to ${data.masked_phone ? data.masked_phone : 'your phone/email'}.`
+                );
+            } else if (data?.profile) {
+                await handleLoginSuccess(data.profile);
             }
         } catch (err) {
-            setError(err?.response?.data?.error || 'Connection error. Please try again.');
+            if (err?.response?.data?.is_first_time) {
+                setSignInStep('staff_first_time');
+                if (err.response.data.dev_pin) {
+                    setDevPin(err.response.data.dev_pin);
+                }
+                if (err.response.data.masked_phone) {
+                    setMaskedPhone(err.response.data.masked_phone);
+                }
+                setInfoMessage(err.response.data.error || 'Welcome! Please set up your password.');
+            } else {
+                setError(err?.response?.data?.error || 'Invalid email/phone or password. Please try again.');
+            }
         } finally {
             setLoading(false);
         }
     };
 
-    const handleStaffOtpSubmit = async (event) => {
+    const handleVerify2faSubmit = async (event) => {
         event.preventDefault();
         setError('');
+        setInfoMessage('');
 
-        if (otpAttempts >= MAX_OTP_ATTEMPTS) {
-            setError('Too many failed attempts. Please go back and request a new code.');
-            return;
-        }
-
-        if (otpInput.trim() !== generatedOtp) {
-            const newAttempts = otpAttempts + 1;
-            setOtpAttempts(newAttempts);
-            const remaining = MAX_OTP_ATTEMPTS - newAttempts;
-            if (remaining > 0) {
-                setError(`Incorrect verification code. ${remaining} attempt${remaining === 1 ? '' : 's'} remaining.`);
-            } else {
-                setError('Too many failed attempts. Please go back and request a new code.');
-            }
+        const trimmedOtp = verificationOtp.trim();
+        if (!trimmedOtp || trimmedOtp.length !== 6) {
+            setError('Please enter the 6-digit verification code.');
             return;
         }
 
         setLoading(true);
         try {
             const currentApiUrl = getResolvedBaseUrl();
-            await axios.post(`${currentApiUrl}/profile/${authenticatedUser.user_guid}`, authenticatedUser);
-            await refreshProfile(authenticatedUser.user_guid);
-            auth.login();
-            if (isTV) {
-                navigate(`/${authenticatedUser.business}/PlayersMonitor`, { replace: true });
-            } else if (requestedProtectedPath) {
-                navigate(requestedProtectedPath, { replace: true });
+            const response = await axios.post(`${currentApiUrl}/auth/verify-2fa`, {
+                identifier: twoFaData?.identifier || identifier.trim(),
+                otp: trimmedOtp,
+                user_guid: twoFaData?.user_guid,
+                customer_guid: twoFaData?.customer_guid,
+                source: twoFaData?.source
+            });
+
+            const profileData = response.data?.profile;
+            if (profileData?.user_guid) {
+                await handleLoginSuccess(profileData);
             } else {
-                navigate(`/${authenticatedUser.business || 'alpha_rentals'}`, { replace: true });
+                setError('Verification failed. Please try again.');
             }
-        } catch {
-            setError('Unable to sign in right now. Please try again.');
+        } catch (err) {
+            setError(err?.response?.data?.error || 'Invalid or expired verification code. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+
+    const navigateStaffUser = (staffAccount) => {
+        if (isTV) {
+            navigate(`/${staffAccount.business}/PlayersMonitor`, { replace: true });
+        } else if (requestedProtectedPath) {
+            navigate(requestedProtectedPath, { replace: true });
+        } else {
+            navigate(`/${staffAccount.business || 'alpha_rentals'}`, { replace: true });
+        }
+    };
+
+    const handleStaffFirstTimeSubmit = async (event) => {
+        event.preventDefault();
+        setError('');
+        setInfoMessage('');
+
+        if (!staffNewPassword) {
+            setError('Please create a password.');
+            return;
+        }
+
+        const strength = evaluatePasswordStrength(staffNewPassword);
+        if (!strength.isValid) {
+            setError(`Password requirement: ${strength.errors[0]}`);
+            return;
+        }
+
+        if (staffNewPassword !== staffConfirmPassword) {
+            setError('Passwords do not match. Please verify both passwords.');
+            return;
+        }
+
+        if (!staffSetupOtp || staffSetupOtp.trim().length !== 6) {
+            setError('Please enter the 6-digit verification code sent to your phone.');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const currentApiUrl = getResolvedBaseUrl();
+            const res = await axios.post(`${currentApiUrl}/auth/staff/setup-password`, {
+                identifier: identifier.trim(),
+                user_guid: authenticatedUser?.user_guid,
+                password: staffNewPassword,
+                otp: staffSetupOtp.trim()
+            });
+
+            const profileData = res.data?.profile || authenticatedUser;
+            if (profileData?.user_guid) {
+                await refreshProfile(profileData.user_guid);
+                auth.login();
+                navigateStaffUser(profileData);
+            } else {
+                setError('Could not complete setup. Please try again.');
+            }
+        } catch (err) {
+            setError(err?.response?.data?.error || 'Unable to set password. Please check your verification code.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleStaffPasswordSubmit = async (event) => {
+        event.preventDefault();
+        setError('');
+        setInfoMessage('');
+
+        if (!staffPassword) {
+            setError('Please enter your password.');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const currentApiUrl = getResolvedBaseUrl();
+            const res = await axios.post(`${currentApiUrl}/auth/staff/login`, {
+                identifier: identifier.trim(),
+                password: staffPassword
+            });
+
+            if (res.data?.require_2fa || res.data?.requires_2fa) {
+                setSignInStep('staff_2fa');
+                setStaff2faOtp('');
+                setMaskedPhone(res.data.masked_phone || maskedPhone);
+                if (res.data.dev_pin) {
+                    console.log('====================================================');
+                    console.log(`📱 [DEV OTP CONSOLE] 🔐 6-DIGIT STAFF 2FA PIN:`, res.data.dev_pin);
+                    console.log(`   Account:`, identifier);
+                    console.log('====================================================');
+                    setDevPin(res.data.dev_pin);
+                }
+                setInfoMessage(res.data.message || 'Password verified! Enter the 6-digit verification code sent to your phone.');
+            } else if (res.data?.profile) {
+                await refreshProfile(res.data.profile.user_guid);
+                auth.login();
+                navigateStaffUser(res.data.profile);
+            }
+        } catch (err) {
+            if (err?.response?.data?.is_first_time) {
+                setSignInStep('staff_first_time');
+                setInfoMessage(err.response.data.error);
+            } else {
+                setError(err?.response?.data?.error || 'Invalid password. Please try again or reset your password.');
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleStaff2faSubmit = async (event) => {
+        event.preventDefault();
+        setError('');
+        setInfoMessage('');
+
+        if (!staff2faOtp || staff2faOtp.trim().length !== 6) {
+            setError('Please enter the 6-digit verification code.');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const currentApiUrl = getResolvedBaseUrl();
+            const res = await axios.post(`${currentApiUrl}/auth/staff/verify-2fa`, {
+                identifier: identifier.trim(),
+                user_guid: authenticatedUser?.user_guid,
+                otp: staff2faOtp.trim()
+            });
+
+            const profileData = res.data?.profile || authenticatedUser;
+            if (profileData?.user_guid) {
+                await refreshProfile(profileData.user_guid);
+                auth.login();
+                navigateStaffUser(profileData);
+            } else {
+                setError('Verification failed. Please try again.');
+            }
+        } catch (err) {
+            setError(err?.response?.data?.error || 'Invalid or expired verification code. Please try again.');
         } finally {
             setLoading(false);
         }
@@ -301,6 +502,180 @@ const AuthenticateUser = () => {
         }
     };
 
+    const handleForgotPasswordRequest = async (targetIdent) => {
+        const ident = (targetIdent || resetIdentifier || identifier).trim();
+        if (!ident) {
+            setError('Please enter your email address or phone number to reset your password.');
+            return;
+        }
+
+        setResetIdentifier(ident);
+        setError('');
+        setInfoMessage('');
+        setLoading(true);
+        try {
+            const currentApiUrl = getResolvedBaseUrl();
+            const res = await axios.post(`${currentApiUrl}/auth/forgot-password`, {
+                identifier: ident
+            });
+
+            setMaskedPhone(res.data?.masked_phone || '');
+            setSignInStep('forgot_password');
+            setResetStep('enter_code');
+            setResetToken('');
+            setResetOtp('');
+            setResetNewPassword('');
+            setResetConfirmPassword('');
+            if (res.data?.dev_pin) {
+                console.log('====================================================');
+                console.log(`📱 [DEV OTP CONSOLE] 🔐 6-DIGIT PASSWORD RESET PIN:`, res.data.dev_pin);
+                console.log(`   Account:`, ident);
+                console.log('====================================================');
+                setDevPin(res.data.dev_pin);
+            }
+            setInfoMessage(
+                res.data?.message ||
+                'A 6-digit verification code has been dispatched. Enter the code below to verify your identity.'
+            );
+        } catch (err) {
+            setError(err?.response?.data?.error || 'Unable to request password reset. Please check your details and try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleVerifyResetCode = async (event) => {
+        if (event) event.preventDefault();
+        setError('');
+        setInfoMessage('');
+
+        const code = resetOtp.trim();
+        if (!code || code.length !== 6) {
+            setError('Please enter the 6-digit verification code.');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const currentApiUrl = getResolvedBaseUrl();
+            const res = await axios.post(`${currentApiUrl}/auth/verify-reset-code`, {
+                identifier: resetIdentifier.trim(),
+                otp: code
+            });
+
+            if (res.data?.reset_token) {
+                setResetToken(res.data.reset_token);
+            }
+            setResetStep('set_password');
+            setInfoMessage('Identity verified successfully! Please enter and confirm your new password below.');
+        } catch (err) {
+            setError(err?.response?.data?.error || 'Invalid or expired verification code. Please check the code and try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleResetPasswordSubmit = async (event) => {
+        event.preventDefault();
+        setError('');
+        setInfoMessage('');
+
+        if (!resetNewPassword) {
+            setError('Please enter a new password.');
+            return;
+        }
+
+        const strength = evaluatePasswordStrength(resetNewPassword);
+        if (!strength.isValid) {
+            setError(`Password requirement: ${strength.errors[0]}`);
+            return;
+        }
+
+        if (resetNewPassword !== resetConfirmPassword) {
+            setError('Passwords do not match. Please verify both passwords.');
+            return;
+        }
+
+        setLoading(true);
+        try {
+            const currentApiUrl = getResolvedBaseUrl();
+            const res = await axios.post(`${currentApiUrl}/auth/reset-password`, {
+                identifier: resetIdentifier.trim(),
+                otp: resetOtp.trim(),
+                reset_token: resetToken,
+                new_password: resetNewPassword
+            });
+
+            const loggedInProfile = res.data?.profile;
+            if (loggedInProfile?.user_guid) {
+                // Clear the reset form
+                setDevPin('');
+                setResetOtp('');
+                setResetToken('');
+                setResetStep('enter_code');
+                setResetNewPassword('');
+                setResetConfirmPassword('');
+
+                // Immediately log in user without asking for password or verification code
+                await handleLoginSuccess(loggedInProfile);
+            } else {
+                setInfoMessage(
+                    res.data?.message || 'Password reset successfully! Please sign in with your new password.'
+                );
+                setDevPin('');
+                setResetOtp('');
+                setResetToken('');
+                setResetStep('enter_code');
+                setResetNewPassword('');
+                setResetConfirmPassword('');
+                setSignInStep('lookup');
+                setIdentifier(resetIdentifier);
+            }
+        } catch (err) {
+            setError(err?.response?.data?.error || 'Unable to reset password. Please verify your details and try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleResendOtp = async (purpose) => {
+        let ident = (purpose === 'password_reset' ? resetIdentifier : (twoFaData?.identifier || identifier)).trim();
+        let targetPurpose = purpose;
+        if (purpose === 'verify_2fa' || purpose === '2fa') {
+            targetPurpose = twoFaData?.source === 'customers' ? 'customer_2fa' : 'staff_2fa';
+        }
+
+        if (!ident) {
+            setError('Identifier is missing. Please restart sign in.');
+            return;
+        }
+
+        setError('');
+        setLoading(true);
+        try {
+            const currentApiUrl = getResolvedBaseUrl();
+            const res = await axios.post(`${currentApiUrl}/auth/resend-otp`, {
+                identifier: ident,
+                purpose: targetPurpose
+            });
+            if (res.data?.dev_pin) {
+                console.log('====================================================');
+                console.log(`📱 [DEV OTP CONSOLE] 🔐 6-DIGIT VERIFICATION PIN (${targetPurpose || 'verification'}):`, res.data.dev_pin);
+                console.log(`   Account:`, ident);
+                console.log('====================================================');
+                setDevPin(res.data.dev_pin);
+            }
+            setInfoMessage(res.data?.message || 'A fresh 6-digit verification code has been dispatched.');
+            if (res.data?.masked_phone) {
+                setMaskedPhone(res.data.masked_phone);
+            }
+        } catch (err) {
+            setError(err?.response?.data?.error || 'Could not resend code. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleCustomerSignUp = async (event) => {
         event.preventDefault();
         setError('');
@@ -319,8 +694,9 @@ const AuthenticateUser = () => {
             return;
         }
 
-        if (signUpPassword.length < 4) {
-            setError('Password must be at least 4 characters.');
+        const pwdStrength = evaluatePasswordStrength(signUpPassword);
+        if (!pwdStrength.isValid) {
+            setError(`Password requirement: ${pwdStrength.errors[0]}`);
             return;
         }
 
@@ -371,45 +747,14 @@ const AuthenticateUser = () => {
         }
     };
 
-    const handleBackToLookup = () => {
-        setStep(1);
-        setMatchedSource(null);
-        setAuthenticatedUser(null);
-        setOtpInput('');
-        setGeneratedOtp('');
-        setCustomerPassword('');
-        setOtpAttempts(0);
-        setError('');
-        setInfoMessage('');
-    };
-
     const formatCountdown = (seconds) => {
         const mins = Math.floor(seconds / 60);
         const secs = seconds % 60;
         return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
     };
 
-    const isLocked = otpAttempts >= MAX_OTP_ATTEMPTS;
-
     return (
         <Card>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '0.75rem' }}>
-                <img
-                    src={appLogo}
-                    alt="Triple Great Logo"
-                    style={{
-                        width: '76px',
-                        height: '76px',
-                        borderRadius: '16px',
-                        objectFit: 'cover',
-                        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.25)',
-                        border: '2px solid rgba(23, 75, 15, 0.3)',
-                        marginBottom: '0.75rem'
-                    }}
-                />
-                <h2 className={classes.authentication} style={{ margin: 0 }}>Triple Great</h2>
-            </div>
-
             {requestedProtectedPath && !auth.isLoggedIn && (
                 <div
                     style={{
@@ -526,10 +871,10 @@ const AuthenticateUser = () => {
                     {/* MODE 1: Sign In */}
                     {authMode === 'phone' && (
                         <>
-                            {step === 1 && (
-                                <form className={classes.form} onSubmit={handleLookupSubmit}>
-                                    <div style={{ display: 'flex', flexDirection: 'column', marginBottom: '1.5rem' }}>
-                                        <label htmlFor="identifier" style={{ fontWeight: '600', marginBottom: '0.5rem', color: '#333' }}>
+                            {signInStep === 'lookup' && (
+                                <form className={classes.form} onSubmit={handleSignInSubmit}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', marginBottom: '1rem' }}>
+                                        <label htmlFor="identifier" style={{ fontWeight: '600', color: '#333', marginBottom: '0.4rem' }}>
                                             Phone Number or Email:
                                         </label>
                                         <input
@@ -551,47 +896,226 @@ const AuthenticateUser = () => {
                                         />
                                     </div>
 
+                                    <div style={{ display: 'flex', flexDirection: 'column', marginBottom: '1.5rem' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                                            <label htmlFor="signInPassword" style={{ fontWeight: '600', color: '#333' }}>
+                                                Password:
+                                            </label>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleForgotPasswordRequest(identifier)}
+                                                disabled={loading}
+                                                style={{ background: 'none', border: 'none', color: '#174b0f', fontSize: '0.84rem', fontWeight: 'bold', cursor: 'pointer', padding: 0 }}
+                                            >
+                                                Forgot Password?
+                                            </button>
+                                        </div>
+                                        <PasswordInput
+                                            id="signInPassword"
+                                            placeholder="Enter your password"
+                                            value={signInPassword}
+                                            onChange={(e) => setSignInPassword(e.target.value)}
+                                            disabled={loading}
+                                            required
+                                            style={{
+                                                padding: '0.8rem',
+                                                border: '1px solid #ccc',
+                                                borderRadius: '6px',
+                                                fontSize: '1rem'
+                                            }}
+                                        />
+                                    </div>
+
                                     <div className={classes.buttonBar}>
                                         <Button type="submit" disabled={loading}>
-                                            {loading ? 'Please wait...' : 'Continue'}
+                                            {loading ? 'Verifying...' : 'Sign In'}
                                         </Button>
                                     </div>
                                 </form>
                             )}
 
-                            {step === 2 && matchedSource === 'users_table' && (
-                                <form className={classes.form} onSubmit={handleStaffOtpSubmit}>
+                            {/* 2FA VERIFICATION CODE STEP (Shown only after correct email/phone + password) */}
+                            {signInStep === 'verify_2fa' && (
+                                <form className={classes.form} onSubmit={handleVerify2faSubmit}>
+                                    <div style={{
+                                        backgroundColor: '#f0fdf4',
+                                        border: '1px solid #bbf7d0',
+                                        color: '#166534',
+                                        padding: '0.75rem',
+                                        borderRadius: '6px',
+                                        fontSize: '0.85rem',
+                                        marginBottom: '1rem'
+                                    }}>
+                                        <strong>Two-Factor Verification:</strong> Enter the 6-digit verification code sent to {maskedPhone ? `(${maskedPhone})` : 'your registered phone/email'}.
+                                    </div>
+
+                                    {devPin && (
+                                        <div style={{
+                                            backgroundColor: '#ecfdf5',
+                                            border: '1px solid #10b981',
+                                            color: '#065f46',
+                                            padding: '0.6rem 0.8rem',
+                                            borderRadius: '6px',
+                                            fontSize: '0.9rem',
+                                            fontWeight: 'bold',
+                                            marginBottom: '1rem',
+                                            textAlign: 'center'
+                                        }}>
+                                            🔐 DEV PIN (CONSOLE LOGGED): <span style={{ fontSize: '1.2rem', letterSpacing: '2px', color: '#047857' }}>{devPin}</span>
+                                        </div>
+                                    )}
+
                                     <div style={{ display: 'flex', flexDirection: 'column', marginBottom: '1.5rem' }}>
-                                        <label htmlFor="otp" style={{ fontWeight: '600', marginBottom: '0.5rem', color: '#333' }}>
-                                            6-Digit Verification Code:
-                                        </label>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                                            <label htmlFor="auth-verification-otp" style={{ fontWeight: '600', color: '#333' }}>
+                                                6-Digit Verification Code:
+                                            </label>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleResendOtp('verify_2fa')}
+                                                disabled={loading}
+                                                style={{ background: 'none', border: 'none', color: '#174b0f', fontSize: '0.82rem', fontWeight: 'bold', cursor: 'pointer', padding: 0 }}
+                                            >
+                                                Resend Code
+                                            </button>
+                                        </div>
                                         <input
                                             type="text"
-                                            id="otp"
+                                            id="auth-verification-otp"
                                             maxLength={6}
-                                            placeholder="Enter 6-digit code"
-                                            value={otpInput}
-                                            onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, ''))}
-                                            disabled={loading || isLocked}
+                                            placeholder="123456"
+                                            value={verificationOtp}
+                                            onChange={(e) => setVerificationOtp(e.target.value.replace(/\D/g, ''))}
+                                            disabled={loading}
                                             required
+                                            autoFocus
                                             style={{
                                                 padding: '0.8rem',
-                                                border: `2px solid ${isLocked ? '#dc3545' : '#007bff'}`,
+                                                border: '2px solid #174b0f',
                                                 borderRadius: '6px',
                                                 fontSize: '1.2rem',
                                                 letterSpacing: '0.3rem',
                                                 textAlign: 'center',
                                                 width: '100%',
                                                 boxSizing: 'border-box',
-                                                fontWeight: 'bold',
-                                                opacity: isLocked ? 0.5 : 1
+                                                fontWeight: 'bold'
                                             }}
                                         />
                                     </div>
 
                                     <div className={classes.buttonBar} style={{ flexDirection: 'column', gap: '10px' }}>
-                                        <Button type="submit" disabled={loading || isLocked}>
+                                        <Button type="submit" disabled={loading}>
                                             {loading ? 'Verifying...' : 'Verify & Sign In'}
+                                        </Button>
+                                        <Button inverse type="button" onClick={handleBackToLookup} disabled={loading}>
+                                            ← Back to Sign In
+                                        </Button>
+                                    </div>
+                                </form>
+                            )}
+
+                            {/* STAFF FIRST-TIME SETUP */}
+                            {signInStep === 'staff_first_time' && (
+                                <form className={classes.form} onSubmit={handleStaffFirstTimeSubmit}>
+                                    <div style={{
+                                        backgroundColor: '#f0fdf4',
+                                        border: '1px solid #bbf7d0',
+                                        color: '#166534',
+                                        padding: '0.75rem',
+                                        borderRadius: '6px',
+                                        fontSize: '0.85rem',
+                                        marginBottom: '1rem'
+                                    }}>
+                                        <strong>First-Time Staff Setup:</strong> Create a strong password and enter the 6-digit code sent to your phone {maskedPhone ? `(${maskedPhone})` : ''}.
+                                    </div>
+
+                                    {devPin && (
+                                        <div style={{
+                                            backgroundColor: '#ecfdf5',
+                                            border: '1px solid #10b981',
+                                            color: '#065f46',
+                                            padding: '0.6rem 0.8rem',
+                                            borderRadius: '6px',
+                                            fontSize: '0.9rem',
+                                            fontWeight: 'bold',
+                                            marginBottom: '1rem',
+                                            textAlign: 'center'
+                                        }}>
+                                            🔐 DEV PIN (CONSOLE LOGGED): <span style={{ fontSize: '1.2rem', letterSpacing: '2px', color: '#047857' }}>{devPin}</span>
+                                        </div>
+                                    )}
+
+                                    <div style={{ display: 'flex', flexDirection: 'column', marginBottom: '1rem' }}>
+                                        <label htmlFor="auth-staff-new-pwd" style={{ fontWeight: '600', marginBottom: '0.35rem', color: '#333' }}>
+                                            New Password *
+                                        </label>
+                                        <PasswordInput
+                                            id="auth-staff-new-pwd"
+                                            placeholder="Create strong password"
+                                            value={staffNewPassword}
+                                            onChange={(e) => setStaffNewPassword(e.target.value)}
+                                            disabled={loading}
+                                            required
+                                            style={{ padding: '0.8rem', border: '1px solid #ccc', borderRadius: '6px', fontSize: '1rem' }}
+                                        />
+                                        <PasswordStrengthChecklist password={staffNewPassword} />
+                                    </div>
+
+                                    <div style={{ display: 'flex', flexDirection: 'column', marginBottom: '1rem' }}>
+                                        <label htmlFor="auth-staff-confirm-pwd" style={{ fontWeight: '600', marginBottom: '0.35rem', color: '#333' }}>
+                                            Confirm Password *
+                                        </label>
+                                        <PasswordInput
+                                            id="auth-staff-confirm-pwd"
+                                            placeholder="Confirm password"
+                                            value={staffConfirmPassword}
+                                            onChange={(e) => setStaffConfirmPassword(e.target.value)}
+                                            disabled={loading}
+                                            required
+                                            style={{ padding: '0.8rem', border: '1px solid #ccc', borderRadius: '6px', fontSize: '1rem' }}
+                                        />
+                                    </div>
+
+                                    <div style={{ display: 'flex', flexDirection: 'column', marginBottom: '1.5rem' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                                            <label htmlFor="auth-staff-setup-otp" style={{ fontWeight: '600', color: '#333' }}>
+                                                6-Digit Verification Code *
+                                            </label>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleResendOtp('staff_first_time')}
+                                                disabled={loading}
+                                                style={{ background: 'none', border: 'none', color: '#174b0f', fontSize: '0.82rem', fontWeight: 'bold', cursor: 'pointer', padding: 0 }}
+                                            >
+                                                Resend Code
+                                            </button>
+                                        </div>
+                                        <input
+                                            type="text"
+                                            id="auth-staff-setup-otp"
+                                            maxLength={6}
+                                            placeholder="123456"
+                                            value={staffSetupOtp}
+                                            onChange={(e) => setStaffSetupOtp(e.target.value.replace(/\D/g, ''))}
+                                            disabled={loading}
+                                            required
+                                            style={{
+                                                padding: '0.8rem',
+                                                border: '2px solid #174b0f',
+                                                borderRadius: '6px',
+                                                fontSize: '1.2rem',
+                                                letterSpacing: '0.3rem',
+                                                textAlign: 'center',
+                                                width: '100%',
+                                                boxSizing: 'border-box',
+                                                fontWeight: 'bold'
+                                            }}
+                                        />
+                                    </div>
+
+                                    <div className={classes.buttonBar} style={{ flexDirection: 'column', gap: '10px' }}>
+                                        <Button type="submit" disabled={loading}>
+                                            {loading ? 'Setting Password...' : 'Save Password & Sign In'}
                                         </Button>
                                         <Button inverse type="button" onClick={handleBackToLookup} disabled={loading}>
                                             Back
@@ -600,14 +1124,149 @@ const AuthenticateUser = () => {
                                 </form>
                             )}
 
-                            {step === 2 && matchedSource === 'customers' && (
+                            {/* STAFF PASSWORD */}
+                            {signInStep === 'staff_password' && (
+                                <form className={classes.form} onSubmit={handleStaffPasswordSubmit}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', marginBottom: '1.5rem' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                                            <label htmlFor="auth-staff-password" style={{ fontWeight: '600', color: '#333' }}>
+                                                Staff Password:
+                                            </label>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleForgotPasswordRequest(identifier)}
+                                                disabled={loading}
+                                                style={{ background: 'none', border: 'none', color: '#174b0f', fontSize: '0.82rem', fontWeight: 'bold', cursor: 'pointer', padding: 0 }}
+                                            >
+                                                Forgot Password?
+                                            </button>
+                                        </div>
+                                        <PasswordInput
+                                            id="auth-staff-password"
+                                            placeholder="Enter your password"
+                                            value={staffPassword}
+                                            onChange={(e) => setStaffPassword(e.target.value)}
+                                            disabled={loading}
+                                            required
+                                            style={{
+                                                padding: '0.8rem',
+                                                border: '1px solid #ccc',
+                                                borderRadius: '6px',
+                                                fontSize: '1rem'
+                                            }}
+                                        />
+                                    </div>
+
+                                    <div className={classes.buttonBar} style={{ flexDirection: 'column', gap: '10px' }}>
+                                        <Button type="submit" disabled={loading}>
+                                            {loading ? 'Verifying...' : 'Continue'}
+                                        </Button>
+                                        <Button inverse type="button" onClick={handleBackToLookup} disabled={loading}>
+                                            Back
+                                        </Button>
+                                    </div>
+                                </form>
+                            )}
+
+                            {/* STAFF 2FA */}
+                            {signInStep === 'staff_2fa' && (
+                                <form className={classes.form} onSubmit={handleStaff2faSubmit}>
+                                    <div style={{
+                                        backgroundColor: '#f0fdf4',
+                                        border: '1px solid #bbf7d0',
+                                        color: '#166534',
+                                        padding: '0.75rem',
+                                        borderRadius: '6px',
+                                        fontSize: '0.85rem',
+                                        marginBottom: '1rem'
+                                    }}>
+                                        <strong>Two-Factor Authentication:</strong> Enter the 6-digit code sent to your phone {maskedPhone ? `(${maskedPhone})` : ''}.
+                                    </div>
+
+                                    {devPin && (
+                                        <div style={{
+                                            backgroundColor: '#ecfdf5',
+                                            border: '1px solid #10b981',
+                                            color: '#065f46',
+                                            padding: '0.6rem 0.8rem',
+                                            borderRadius: '6px',
+                                            fontSize: '0.9rem',
+                                            fontWeight: 'bold',
+                                            marginBottom: '1rem',
+                                            textAlign: 'center'
+                                        }}>
+                                            🔐 DEV PIN (CONSOLE LOGGED): <span style={{ fontSize: '1.2rem', letterSpacing: '2px', color: '#047857' }}>{devPin}</span>
+                                        </div>
+                                    )}
+
+                                    <div style={{ display: 'flex', flexDirection: 'column', marginBottom: '1.5rem' }}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                                            <label htmlFor="auth-staff-2fa-otp" style={{ fontWeight: '600', color: '#333' }}>
+                                                6-Digit Verification Code:
+                                            </label>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleResendOtp('staff_2fa')}
+                                                disabled={loading}
+                                                style={{ background: 'none', border: 'none', color: '#174b0f', fontSize: '0.82rem', fontWeight: 'bold', cursor: 'pointer', padding: 0 }}
+                                            >
+                                                Resend Code
+                                            </button>
+                                        </div>
+                                        <input
+                                            type="text"
+                                            id="auth-staff-2fa-otp"
+                                            maxLength={6}
+                                            placeholder="123456"
+                                            value={staff2faOtp}
+                                            onChange={(e) => setStaff2faOtp(e.target.value.replace(/\D/g, ''))}
+                                            disabled={loading}
+                                            required
+                                            style={{
+                                                padding: '0.8rem',
+                                                border: '2px solid #174b0f',
+                                                borderRadius: '6px',
+                                                fontSize: '1.2rem',
+                                                letterSpacing: '0.3rem',
+                                                textAlign: 'center',
+                                                width: '100%',
+                                                boxSizing: 'border-box',
+                                                fontWeight: 'bold'
+                                            }}
+                                        />
+                                    </div>
+
+                                    <div className={classes.buttonBar} style={{ flexDirection: 'column', gap: '10px' }}>
+                                        <Button type="submit" disabled={loading}>
+                                            {loading ? 'Verifying...' : 'Verify & Sign In'}
+                                        </Button>
+                                        <Button inverse type="button" onClick={() => setSignInStep('staff_password')} disabled={loading}>
+                                            Back to Password
+                                        </Button>
+                                    </div>
+                                </form>
+                            )}
+
+                            {/* CUSTOMER PASSWORD */}
+                            {signInStep === 'customer_password' && (
                                 <form className={classes.form} onSubmit={handleCustomerPasswordSubmit}>
                                     <div style={{ display: 'flex', flexDirection: 'column', marginBottom: '1.5rem' }}>
-                                        <label htmlFor="customer-password" style={{ fontWeight: '600', marginBottom: '0.5rem', color: '#333' }}>
-                                            {customerHasPassword ? 'Password:' : 'Create Password:'}
-                                        </label>
-                                        <input
-                                            type="password"
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                                            <label htmlFor="customer-password" style={{ fontWeight: '600', color: '#333' }}>
+                                                {customerHasPassword ? 'Password:' : 'Create Password:'}
+                                            </label>
+                                            {customerHasPassword && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleForgotPasswordRequest(identifier)}
+                                                    disabled={loading}
+                                                    style={{ background: 'none', border: 'none', color: '#174b0f', fontSize: '0.82rem', fontWeight: 'bold', cursor: 'pointer', padding: 0 }}
+                                                >
+                                                    Forgot Password?
+                                                </button>
+                                            )}
+                                        </div>
+                                        <PasswordInput
                                             id="customer-password"
                                             placeholder="Enter your password"
                                             value={customerPassword}
@@ -618,9 +1277,7 @@ const AuthenticateUser = () => {
                                                 padding: '0.8rem',
                                                 border: '1px solid #ccc',
                                                 borderRadius: '6px',
-                                                fontSize: '1rem',
-                                                width: '100%',
-                                                boxSizing: 'border-box'
+                                                fontSize: '1rem'
                                             }}
                                         />
                                     </div>
@@ -635,6 +1292,193 @@ const AuthenticateUser = () => {
                                     </div>
                                 </form>
                             )}
+
+                            {/* FORGOT PASSWORD */}
+                            {signInStep === 'forgot_password' && (
+                                <div className={classes.form}>
+                                    {/* Multi-step progress indicator */}
+                                    <div style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        gap: '8px',
+                                        marginBottom: '1rem',
+                                        fontSize: '0.85rem'
+                                    }}>
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            padding: '4px 10px',
+                                            borderRadius: '16px',
+                                            backgroundColor: resetStep === 'enter_code' ? '#174b0f' : '#dcfce7',
+                                            color: resetStep === 'enter_code' ? '#ffffff' : '#166534',
+                                            fontWeight: 700
+                                        }}>
+                                            <span>{resetStep === 'set_password' ? '✓' : '1'}</span>
+                                            <span>Verify Identity</span>
+                                        </div>
+                                        <span style={{ color: '#94a3b8', fontWeight: 'bold' }}>&rarr;</span>
+                                        <div style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '6px',
+                                            padding: '4px 10px',
+                                            borderRadius: '16px',
+                                            backgroundColor: resetStep === 'set_password' ? '#174b0f' : '#f1f5f9',
+                                            color: resetStep === 'set_password' ? '#ffffff' : '#64748b',
+                                            fontWeight: resetStep === 'set_password' ? 700 : 500
+                                        }}>
+                                            <span>2</span>
+                                            <span>Set New Password</span>
+                                        </div>
+                                    </div>
+
+                                    {/* STEP 1: VERIFY CODE (New Password and Confirm Password remain HIDDEN!) */}
+                                    {resetStep === 'enter_code' && (
+                                        <form onSubmit={handleVerifyResetCode}>
+                                            <div style={{
+                                                backgroundColor: '#fef3c7',
+                                                border: '1px solid #fde68a',
+                                                color: '#92400e',
+                                                padding: '0.75rem',
+                                                borderRadius: '6px',
+                                                fontSize: '0.85rem',
+                                                marginBottom: '1rem'
+                                            }}>
+                                                <strong>Step 1 of 2:</strong> Enter the 6-digit code sent to {maskedPhone ? `(${maskedPhone})` : (resetIdentifier || 'your phone/email')} to verify your identity.
+                                            </div>
+
+                                            {devPin && (
+                                                <div style={{
+                                                    backgroundColor: '#ecfdf5',
+                                                    border: '1px solid #10b981',
+                                                    color: '#065f46',
+                                                    padding: '0.6rem 0.8rem',
+                                                    borderRadius: '6px',
+                                                    fontSize: '0.9rem',
+                                                    fontWeight: 'bold',
+                                                    marginBottom: '1rem',
+                                                    textAlign: 'center'
+                                                }}>
+                                                    🔐 DEV PIN (CONSOLE LOGGED): <span style={{ fontSize: '1.2rem', letterSpacing: '2px', color: '#047857' }}>{devPin}</span>
+                                                </div>
+                                            )}
+
+                                            <div style={{ display: 'flex', flexDirection: 'column', marginBottom: '1.25rem' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                                                    <label htmlFor="auth-reset-otp" style={{ fontWeight: '600', color: '#333' }}>
+                                                        6-Digit Reset Code *
+                                                    </label>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleResendOtp('password_reset')}
+                                                        disabled={loading}
+                                                        style={{ background: 'none', border: 'none', color: '#174b0f', fontSize: '0.82rem', fontWeight: 'bold', cursor: 'pointer', padding: 0 }}
+                                                    >
+                                                        Resend Code
+                                                    </button>
+                                                </div>
+                                                <input
+                                                    type="text"
+                                                    id="auth-reset-otp"
+                                                    maxLength={6}
+                                                    placeholder="123456"
+                                                    value={resetOtp}
+                                                    onChange={(e) => setResetOtp(e.target.value.replace(/\D/g, ''))}
+                                                    disabled={loading}
+                                                    required
+                                                    autoFocus
+                                                    style={{
+                                                        padding: '0.8rem',
+                                                        border: '2px solid #b45309',
+                                                        borderRadius: '6px',
+                                                        fontSize: '1.2rem',
+                                                        letterSpacing: '0.3rem',
+                                                        textAlign: 'center',
+                                                        width: '100%',
+                                                        boxSizing: 'border-box',
+                                                        fontWeight: 'bold'
+                                                    }}
+                                                />
+                                            </div>
+
+                                            <div className={classes.buttonBar} style={{ flexDirection: 'column', gap: '10px' }}>
+                                                <Button type="submit" disabled={loading || resetOtp.length !== 6}>
+                                                    {loading ? 'Verifying Code...' : 'Verify Code'}
+                                                </Button>
+                                                <Button inverse type="button" onClick={handleBackToLookup} disabled={loading}>
+                                                    Back to Sign In
+                                                </Button>
+                                            </div>
+                                        </form>
+                                    )}
+
+                                    {/* STEP 2: SET NEW PASSWORD (Revealed ONLY after identity verification!) */}
+                                    {resetStep === 'set_password' && (
+                                        <form onSubmit={handleResetPasswordSubmit}>
+                                            <div style={{
+                                                backgroundColor: '#f0fdf4',
+                                                border: '1px solid #bbf7d0',
+                                                color: '#166534',
+                                                padding: '0.75rem',
+                                                borderRadius: '6px',
+                                                fontSize: '0.85rem',
+                                                marginBottom: '1rem',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '8px'
+                                            }}>
+                                                <span style={{ fontSize: '1.2rem' }}>✓</span>
+                                                <div>
+                                                    <strong>Identity Verified!</strong> Please enter and confirm your new password below (cannot be your last password).
+                                                </div>
+                                            </div>
+
+                                            <div style={{ display: 'flex', flexDirection: 'column', marginBottom: '1rem' }}>
+                                                <label htmlFor="auth-reset-new-pwd" style={{ fontWeight: '600', marginBottom: '0.35rem', color: '#333' }}>
+                                                    New Password *
+                                                </label>
+                                                <PasswordInput
+                                                    id="auth-reset-new-pwd"
+                                                    placeholder="Enter new strong password"
+                                                    value={resetNewPassword}
+                                                    onChange={(e) => setResetNewPassword(e.target.value)}
+                                                    disabled={loading}
+                                                    required
+                                                    autoFocus
+                                                    style={{ padding: '0.8rem', border: '1px solid #ccc', borderRadius: '6px', fontSize: '1rem' }}
+                                                />
+                                                <PasswordStrengthChecklist password={resetNewPassword} />
+                                            </div>
+
+                                            <div style={{ display: 'flex', flexDirection: 'column', marginBottom: '1.5rem' }}>
+                                                <label htmlFor="auth-reset-confirm-pwd" style={{ fontWeight: '600', marginBottom: '0.35rem', color: '#333' }}>
+                                                    Confirm New Password *
+                                                </label>
+                                                <PasswordInput
+                                                    id="auth-reset-confirm-pwd"
+                                                    placeholder="Confirm new password"
+                                                    value={resetConfirmPassword}
+                                                    onChange={(e) => setResetConfirmPassword(e.target.value)}
+                                                    disabled={loading}
+                                                    required
+                                                    style={{ padding: '0.8rem', border: '1px solid #ccc', borderRadius: '6px', fontSize: '1rem' }}
+                                                />
+                                            </div>
+
+                                            <div className={classes.buttonBar} style={{ flexDirection: 'column', gap: '10px' }}>
+                                                <Button type="submit" disabled={loading}>
+                                                    {loading ? 'Resetting Password...' : 'Reset Password'}
+                                                </Button>
+                                                <Button inverse type="button" onClick={handleBackToLookup} disabled={loading}>
+                                                    Back to Sign In
+                                                </Button>
+                                            </div>
+                                        </form>
+                                    )}
+                                </div>
+                            )}
                         </>
                     )}
 
@@ -648,6 +1492,7 @@ const AuthenticateUser = () => {
                                     </label>
                                     <input
                                         type="text"
+                                        placeholder="First Name"
                                         value={signUpFirstName}
                                         onChange={(e) => setSignUpFirstName(e.target.value)}
                                         required
@@ -661,6 +1506,7 @@ const AuthenticateUser = () => {
                                     </label>
                                     <input
                                         type="text"
+                                        placeholder="Last Name"
                                         value={signUpLastName}
                                         onChange={(e) => setSignUpLastName(e.target.value)}
                                         required
@@ -676,6 +1522,7 @@ const AuthenticateUser = () => {
                                 </label>
                                 <input
                                     type="email"
+                                    placeholder="name@example.com"
                                     value={signUpEmail}
                                     onChange={(e) => setSignUpEmail(e.target.value)}
                                     required
@@ -690,6 +1537,7 @@ const AuthenticateUser = () => {
                                 </label>
                                 <input
                                     type="tel"
+                                    placeholder="(555) 000-0000"
                                     value={signUpPhone}
                                     onChange={(e) => setSignUpPhone(e.target.value)}
                                     required
@@ -702,14 +1550,15 @@ const AuthenticateUser = () => {
                                 <label style={{ fontWeight: '600', fontSize: '0.85rem', color: '#333', display: 'block', marginBottom: '0.3rem' }}>
                                     Password *
                                 </label>
-                                <input
-                                    type="password"
+                                <PasswordInput
+                                    placeholder="Create strong password"
                                     value={signUpPassword}
                                     onChange={(e) => setSignUpPassword(e.target.value)}
                                     required
                                     disabled={loading}
-                                    style={{ padding: '0.65rem', border: '1px solid #ccc', borderRadius: '6px', width: '100%', boxSizing: 'border-box' }}
+                                    style={{ padding: '0.65rem', border: '1px solid #ccc', borderRadius: '6px' }}
                                 />
+                                <PasswordStrengthChecklist password={signUpPassword} />
                             </div>
 
                             <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.82rem', color: '#475569', marginBottom: '1rem' }}>

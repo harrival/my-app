@@ -142,17 +142,18 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers, agentGuid, current
         }
 
         const response = await axios.post(`${BASE_URL}/addToTable`, dbObject);
-        if (response.status === 201) {
+        if (response.status === 201 || response.status === 200) {
           const createdPlayer: Player = { ...newPlayer, game_status: 'Created' };
           setAllPlayers((prev) => [...prev, createdPlayer]);
-          setShowPuzzleForm(false);
           resetForm();
+          setShowPuzzleForm(false);
           if (onPlayerCreated) {
             onPlayerCreated(createdPlayer);
           }
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error adding player:', error);
+        alert(error?.response?.data?.error || 'Failed to add player. Please check inputs and try again.');
       }
     }
   };
@@ -213,7 +214,7 @@ const PlayerPuzzleForm = ({ setShowPuzzleForm, setAllPlayers, agentGuid, current
             value={formState.puzzlePet}
             onChange={handleSelectChange}
           >
-            <option value="">Select a pet</option>
+            <option value="">Select Puzzle Pet...</option>
             <option value="CAT">Cat</option>
             <option value="DOG">Dog</option>
           </select>

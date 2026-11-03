@@ -13,7 +13,7 @@ const LinkedDevicesModal = ({ onClose }) => {
 
   const [pairCodeInput, setPairCodeInput] = useState('');
   const [deviceNameInput, setDeviceNameInput] = useState('');
-  const [deviceTypeInput, setDeviceTypeInput] = useState('Mobile / Companion');
+  const [deviceTypeInput, setDeviceTypeInput] = useState('');
   const [isScanning, setIsScanning] = useState(false);
   const [loading, setLoading] = useState(false);
   const [devices, setDevices] = useState([]);
@@ -67,7 +67,7 @@ const LinkedDevicesModal = ({ onClose }) => {
         identifier: cleanCode,
         userGuid: profile.user_guid,
         deviceName: (customName || deviceNameInput).trim() || '',
-        deviceType: deviceTypeInput,
+        deviceType: deviceTypeInput || 'Mobile / Companion',
         userProfile: profile,
       });
 
@@ -78,6 +78,7 @@ const LinkedDevicesModal = ({ onClose }) => {
         });
         setPairCodeInput('');
         setDeviceNameInput('');
+        setDeviceTypeInput('');
         setIsScanning(false);
         fetchDevices();
       }
@@ -235,6 +236,7 @@ const LinkedDevicesModal = ({ onClose }) => {
                         cursor: 'pointer'
                       }}
                     >
+                      <option value="">Select Device Type...</option>
                       <option value="Mobile / Companion">📱 Phone / Tablet</option>
                       <option value="Television">📺 Television</option>
                       <option value="Computer">💻 Computer</option>

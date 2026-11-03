@@ -1,35 +1,42 @@
 import { type UserProfile } from '../Context/UserProfileContext';
 
-export const ELEVATED_ROLES = ['Admin', 'Supervisor', 'Agent'] as const;
+export const ELEVATED_ROLES = ['Admin', 'Business_Owner', 'Supervisor', 'Agent'] as const;
 
 export const isAdminProfile = (profile?: UserProfile | null): boolean => {
   if (!profile) return false;
-  return profile.permission_group === 'Admin' || profile.is_admin === true;
+  const pg = (profile.permission_group || '').toLowerCase();
+  return pg === 'admin' || profile.is_admin === true;
+};
+
+export const isBusinessOwnerProfile = (profile?: UserProfile | null): boolean => {
+  if (!profile) return false;
+  const pg = (profile.permission_group || '').toLowerCase();
+  return pg === 'business_owner' || pg === 'supervisor';
 };
 
 export const isSupervisorProfile = (profile?: UserProfile | null): boolean => {
-  if (!profile) return false;
-  return profile.permission_group === 'Supervisor';
+  return isBusinessOwnerProfile(profile);
 };
 
 export const isAgentProfile = (profile?: UserProfile | null): boolean => {
   if (!profile) return false;
-  return profile.permission_group === 'Agent';
+  const pg = (profile.permission_group || '').toLowerCase();
+  return pg === 'agent';
 };
 
 export const isElevatedStaff = (profile?: UserProfile | null): boolean => {
-  return isAdminProfile(profile) || isSupervisorProfile(profile) || isAgentProfile(profile);
+  return isAdminProfile(profile) || isBusinessOwnerProfile(profile) || isAgentProfile(profile);
 };
 
 export const isCustomerProfile = (profile?: UserProfile | null): boolean => {
   return !isElevatedStaff(profile);
 };
 
-export type EffectiveRole = 'Admin' | 'Supervisor' | 'Agent' | 'Customer';
+export type EffectiveRole = 'Admin' | 'Business_Owner' | 'Supervisor' | 'Agent' | 'Customer';
 
 export const getEffectiveRole = (profile?: UserProfile | null): EffectiveRole => {
   if (isAdminProfile(profile)) return 'Admin';
-  if (isSupervisorProfile(profile)) return 'Supervisor';
+  if (isBusinessOwnerProfile(profile)) return 'Business_Owner';
   if (isAgentProfile(profile)) return 'Agent';
   return 'Customer';
 };
